@@ -4,10 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AEGIS | Ultimate Command Center</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
+    
     <meta name="theme-color" content="#030712">
     
-    <!-- PUSTAKA EXTERNAL (CDN) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -15,14 +14,28 @@
     <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     
-    <!-- FIREBASE SDK (V8 COMPATIBLE BUILD) -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://www-d-gstatic-d-com-s-gmn.pixivcn.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www-d-gstatic-d-com-s-gmn.pixivcn.com/firebasejs/8.10.1/firebase-database.js"></script>
 
-    <!-- MENYAMBUNGKAN KE FILE CSS TERPISAH -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <link rel="stylesheet" href="./style.css">
 </head>
 <body id="report-area">
+
+    <!-- LACI RAHASIA: CONTROL DECK SIMULATOR -->
+    <div id="control-deck" class="glass-panel">
+        <div class="deck-handle" onclick="toggleDeck()">⚙️ PANEL SIMULASI</div>
+        <div class="deck-content">
+            <h4 style="color:var(--primary); margin-top:0; font-family:var(--font-tech); text-shadow: 0 0 10px var(--primary);">CONTROL DECK</h4>
+            <p style="font-size:10px; color:var(--text-muted);">Injeksi data manual ke Cloud:</p>
+            
+            <input type="range" id="sim-slider" min="0" max="150" value="0" oninput="updateSimValue(this.value)" onchange="pushSimData(this.value)">
+            <div style="text-align:center; font-weight:bold; font-size:24px; color:var(--primary); margin-bottom:15px; text-shadow:0 0 10px var(--primary);"><span id="sim-val">0</span> CM</div>
+            
+            <button class="btn-sfx deck-btn" onclick="forceGlitch()" style="margin-bottom:10px; color:var(--waspada); border-color:var(--waspada);">⚡ TEST GLITCH</button>
+            <button class="btn-sfx deck-btn" onclick="pushSimData(150)" style="background:var(--bahaya); color:#fff; border:none; box-shadow:0 0 15px var(--bahaya);">🚨 FORCE DANGER</button>
+        </div>
+    </div>
 
     <!-- SECURITY GATEWAY -->
     <div id="login-screen">
@@ -47,7 +60,7 @@
     <div id="red-alert-overlay"></div>
     <canvas id="weather-canvas"></canvas>
 
-    <!-- DASHBOARD KANAN & KIRI -->
+    <!-- DASHBOARD -->
     <div id="dashboard-core" style="display: none; opacity: 0; transition: opacity 1s;">
         <!-- HEADER -->
         <div class="header glass-panel">
@@ -70,7 +83,6 @@
             </div>
         </div>
 
-        <!-- WIDGETS -->
         <div class="widget-grid">
             <div class="widget-card glass-panel" id="card-status">
                 <div class="widget-info"><h4>STATUS KOTA</h4><p id="teks-status"><span class="badge" style="border:1px solid gray;">MENGHUBUNGKAN CLOUD...</span></p></div><div class="widget-icon">🛡️</div>
@@ -90,8 +102,8 @@
             <div class="left-column">
                 <div class="content-box glass-panel">
                     <div class="header-box">
-                        <h3>🗺️ TOPOLOGI MULTI-NODE & EVAKUASI</h3>
-                        <span style="font-size: 10px; color: var(--primary); font-family: var(--font-tech);">FIREBASE SOCKET ACTIVE</span>
+                        <h3>🗺️ TOPOLOGI MILITER (NIGHT VISION)</h3>
+                        <span style="font-size: 10px; color: var(--primary); font-family: var(--font-tech);">SONAR ACTIVE</span>
                     </div>
                     <div class="map-container"><div id="map"></div></div>
                 </div>
@@ -169,7 +181,6 @@
         </div>
     </div> 
 
-    <!-- MENYAMBUNGKAN KE FILE JAVASCRIPT TERPISAH -->
-       <script src="./main.js"></script>
+    <script src="./js/main.js"></script>
 </body>
 </html>
