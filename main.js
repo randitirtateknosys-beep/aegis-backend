@@ -72,7 +72,7 @@ function playBeep(freq = 800, type = 'sine', duration = 0.1, vol = 0.05) {
 }
 document.querySelectorAll('.btn-sfx').forEach(btn => { btn.addEventListener('click', () => playBeep(1200, 'square', 0.1)); });
 
-// LOGIN & BOOT
+// LOGIN & BOOT SEQUENCE
 document.getElementById('pass-input').addEventListener('keypress', function(e) { if(e.key === 'Enter') verifyLogin(); });
 function verifyLogin() {
     let pass = document.getElementById('pass-input').value.toLowerCase();
