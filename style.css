@@ -1,5 +1,4 @@
 * { box-sizing: border-box; }
-
 :root {
     --text-main: #f8fafc; --text-muted: #94a3b8;
     --primary: #0ea5e9; --glow-primary: rgba(14, 165, 233, 0.6);
@@ -29,21 +28,24 @@ body {
 }
 body.light-mode { background-color: #f1f5f9; background-image: linear-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 0, 0, 0.05) 1px, transparent 1px); }
 
-/* ==== FITUR 1: CONTROL DECK (LACI RAHASIA) ==== */
 #control-deck { position: fixed; right: -250px; top: 15%; width: 250px; background: rgba(0, 5, 15, 0.95); border: 2px solid var(--primary); border-right: none; border-radius: 15px 0 0 15px; transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1); z-index: 99999; box-shadow: 0 0 30px rgba(14,165,233,0.3); backdrop-filter: blur(10px); }
 #control-deck.open { right: 0; }
-.deck-handle { position: absolute; left: -38px; top: 20px; background: var(--primary); color: #000; padding: 15px 10px; writing-mode: vertical-rl; text-orientation: mixed; border-radius: 10px 0 0 10px; cursor: pointer; font-weight: bold; font-family: var(--font-tech); font-size: 14px; box-shadow: -5px 0 15px var(--glow-primary); transition: 0.3s; letter-spacing: 2px;}
-.deck-handle:hover { filter: brightness(1.2); left: -42px; }
+.deck-handle { position: absolute; left: -38px; top: 20px; background: var(--primary); color: #000; padding: 15px 10px; writing-mode: vertical-rl; text-orientation: mixed; border-radius: 10px 0 0 10px; cursor: pointer; font-weight: bold; font-family: var(--font-tech); font-size: 14px; box-shadow: -5px 0 15px var(--glow-primary); transition: 0.3s; letter-spacing: 2px; display: none;}
 .deck-content { padding: 20px; }
 .deck-btn { width: 100%; padding: 12px; background: transparent; border: 1px solid var(--primary); color: var(--primary); font-family: var(--font-tech); cursor: pointer; border-radius: 5px; transition: 0.3s; font-weight: bold; letter-spacing: 1px;}
 .deck-btn:hover { background: var(--primary); color: #000; box-shadow: 0 0 15px var(--primary); transform: scale(1.05);}
 input[type=range] { width: 100%; margin-bottom: 10px; accent-color: var(--primary); cursor: pointer; height: 8px; background: rgba(255,255,255,0.1); outline: none; border-radius: 4px; }
 
-/* ==== FITUR 2: NIGHT VISION MAP FILTER ==== */
-.leaflet-container { background: #000500 !important; }
-.leaflet-layer { filter: sepia(100%) hue-rotate(70deg) saturate(500%) brightness(0.7) contrast(1.5) invert(10%); }
+/* PCB LED Diagnostics */
+.pcb-led { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #333; margin-right: 2px; }
+.pcb-tx.active { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+.pcb-rx.active { background: #10b981; box-shadow: 0 0 8px #10b981; }
 
-/* ==== FITUR 3: SONAR MARKERS ==== */
+/* Coriolis UI Data */
+.coriolis-data { font-family: var(--font-tech); font-size: 10px; display: flex; gap: 10px; opacity: 0.7; }
+.coriolis-data span { font-weight: bold; }
+
+/* Sonar Markers */
 .sonar-marker { width: 16px; height: 16px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 10px var(--primary); position: relative; }
 .sonar-marker::after { content: ''; position: absolute; top: -12px; left: -12px; width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--primary); animation: sonar-pulse 2s infinite ease-out; }
 .sonar-danger { background: var(--bahaya); box-shadow: 0 0 15px var(--bahaya); }
@@ -52,20 +54,13 @@ input[type=range] { width: 100%; margin-bottom: 10px; accent-color: var(--primar
 .sonar-warning::after { border-color: var(--waspada); animation-duration: 1.5s; }
 @keyframes sonar-pulse { 0% { transform: scale(0.1); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
 
-/* ==== FITUR 4: CYBERPUNK GLITCH & STROBE ==== */
+/* Cyberpunk Glitch & Strobe */
 body.danger-mode { animation: strobe-bg 0.8s infinite alternate; }
 @keyframes strobe-bg { 0% { box-shadow: inset 0 0 0 0 rgba(239, 68, 68, 0); } 100% { box-shadow: inset 0 0 120px 30px rgba(239, 68, 68, 0.5); } }
 .glitch-effect { animation: glitch-anim 0.2s linear infinite; filter: hue-rotate(90deg) contrast(150%) brightness(1.2); }
-@keyframes glitch-anim {
-    0% { transform: translate(0) skew(0deg); }
-    20% { transform: translate(-4px, 2px) skew(2deg); }
-    40% { transform: translate(-2px, -4px) skew(-2deg); }
-    60% { transform: translate(4px, 2px) skew(1deg); }
-    80% { transform: translate(2px, -2px) skew(-1deg); }
-    100% { transform: translate(0) skew(0deg); }
-}
+@keyframes glitch-anim { 0% { transform: translate(0) skew(0deg); } 20% { transform: translate(-4px, 2px) skew(2deg); } 40% { transform: translate(-2px, -4px) skew(-2deg); } 60% { transform: translate(4px, 2px) skew(1deg); } 80% { transform: translate(2px, -2px) skew(-1deg); } 100% { transform: translate(0) skew(0deg); } }
 
-/* SECURITY GATEWAY & LAINNYA */
+/* Gateways & Containers */
 #login-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(3, 7, 18, 0.95); backdrop-filter: blur(20px); z-index: 200000; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 1s, visibility 1s; }
 .login-box { background: rgba(14, 165, 233, 0.05); border: 1px solid var(--primary); padding: 40px; border-radius: 12px; text-align: center; width: 350px; box-shadow: 0 0 30px rgba(14, 165, 233, 0.2), inset 0 0 20px rgba(14, 165, 233, 0.1); }
 .login-box h2 { color: var(--primary); font-family: var(--font-tech); margin-bottom: 5px; letter-spacing: 3px; text-shadow: 0 0 10px var(--primary);}
