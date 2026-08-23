@@ -10,7 +10,6 @@ const firebaseConfig = {
     messagingSenderId: "928229188111",
     appId: "1:928229188111:web:4fc633bc2a1f102350797a"
 };
-// ==========================================
 
 // Initialize Firebase
 if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
@@ -18,10 +17,51 @@ const database = firebase.database();
 
 // Variabel Global
 let currentWaterLevel = 0; let currentStatus = "AMAN";
-let isPumpActive = false; let alarmPlaying = false;
-let systemBooted = false; let globalHistory = [];
+let isPumpActive = false; let isEvacActive = false; let alarmPlaying = false;
+let systemBooted = false; let globalHistory = []; window.lastTimestamp = null;
+let iconAman, iconWaspada, iconBahaya;
 
+// ==========================================
+// FITUR BARU: CONTROL DECK & GLITCH
+// ==========================================
+window.toggleDeck = function() {
+    document.getElementById('control-deck').classList.toggle('open');
+    playBeep(1200, 'square', 0.1);
+}
+
+window.updateSimValue = function(val) {
+    document.getElementById('sim-val').innerText = val;
+    playBeep(400 + parseInt(val)*5, 'sine', 0.05, 0.01);
+}
+
+window.pushSimData = function(val) {
+    let numVal = parseInt(val);
+    let stat = numVal >= 100 ? "BAHAYA" : (numVal >= 70 ? "WASPADA" : "AMAN");
+    let timeStr = new Date().toLocaleTimeString('id-ID', { hour12: false });
+    
+    // Inject (Push) Data manual ke Firebase!
+    database.ref('sensor/logs').push({
+        device_id: "NODE-SIM-1",
+        status: stat,
+        temperature: (28 + Math.random() * 2).toFixed(1),
+        timestamp: timeStr,
+        water_level: numVal
+    });
+    
+    addLog('SYS', `SIMULASI AKTIF: Push ${numVal}cm ke Firebase!`);
+    
+    if(stat === 'BAHAYA') { forceGlitch(); }
+}
+
+window.forceGlitch = function() {
+    document.body.classList.add('glitch-effect');
+    playBeep(100, 'sawtooth', 0.6, 0.3);
+    setTimeout(() => document.body.classList.remove('glitch-effect'), 600);
+}
+
+// ==========================================
 // UI SOUND EFFECTS
+// ==========================================
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 function playBeep(freq = 800, type = 'sine', duration = 0.1, vol = 0.05) {
     if(audioCtx.state === 'suspended') audioCtx.resume();
@@ -32,7 +72,7 @@ function playBeep(freq = 800, type = 'sine', duration = 0.1, vol = 0.05) {
 }
 document.querySelectorAll('.btn-sfx').forEach(btn => { btn.addEventListener('click', () => playBeep(1200, 'square', 0.1)); });
 
-// LOGIN & BOOT SEQUENCE (PASSWORD: admin)
+// LOGIN & BOOT
 document.getElementById('pass-input').addEventListener('keypress', function(e) { if(e.key === 'Enter') verifyLogin(); });
 function verifyLogin() {
     let pass = document.getElementById('pass-input').value.toLowerCase();
@@ -47,7 +87,7 @@ function verifyLogin() {
 function startBootSequence() {
     document.getElementById('boot-screen').style.visibility = 'visible'; document.getElementById('boot-screen').style.opacity = '1';
     const bootLog = document.getElementById('boot-log');
-    const messages = [ "> AUTHENTICATION ACCEPTED...", "> MENGHUBUNGKAN KE FIREBASE WEBSOCKET...", "> SECURE CONNECTION ESTABLISHED (ASIA-SOUTHEAST1)...", "> MEMUAT MODUL GEOSPASIAL...", "> MENGKALIBRASI SENSOR LORA NODE-1...", "> SISTEM A.E.G.I.S CLOUD SIAP." ];
+    const messages = [ "> AUTHENTICATION ACCEPTED...", "> MENGHUBUNGKAN KE FIREBASE WEBSOCKET...", "> MENGAKTIFKAN FILTER MILITER (NIGHT VISION)...", "> MEMUAT RADAR SONAR MULTI-NODE...", "> SISTEM A.E.G.I.S CLOUD SIAP." ];
     let i = 0;
     let bootInterval = setInterval(() => {
         if(i < messages.length) { bootLog.innerHTML += messages[i] + "<br>"; playBeep(400 + (i*100), 'square', 0.05, 0.02); i++; } 
@@ -107,7 +147,7 @@ function drawRain() {
 
 function playVoiceAlarm(status) {
     if (status === 'BAHAYA' && !alarmPlaying) {
-        playBeep(2000, 'square', 0.5, 0.1); let msg = new SpeechSynthesisUtterance("Peringatan kritis! Level air melampaui batas toleransi! Menjalankan protokol evakuasi Kampung Sawah Mede sekarang! Pompa mitigasi telah diaktifkan."); msg.lang = 'id-ID'; window.speechSynthesis.speak(msg); alarmPlaying = true;
+        playBeep(2000, 'square', 0.5, 0.1); let msg = new SpeechSynthesisUtterance("Peringatan kritis! Menjalankan protokol evakuasi Kampung Sawah Mede sekarang!"); msg.lang = 'id-ID'; window.speechSynthesis.speak(msg); alarmPlaying = true;
     } else if (status !== 'BAHAYA') { alarmPlaying = false; }
 }
 
@@ -118,22 +158,15 @@ function addLog(tipe, pesan) {
     term.innerHTML += `<div class="terminal-line"><span style="color:#64748b; width:65px;">${time}</span> <span style="color:${clr}; font-weight:bold; width:50px;">[${tipe}]</span> <span style="color:var(--text-main);">${pesan}</span></div>`; term.scrollTop = term.scrollHeight;
 }
 
-// TERMINAL -> FIREBASE DUAL-WAY SYNC
 document.getElementById('cmd-input').addEventListener('keypress', function(e) {
     if (e.key === 'Enter') {
         let cmd = this.value.toLowerCase().trim(); this.value = ''; addLog('CMD', `> ${cmd}`); playBeep(900, 'square', 0.05); 
-        
         if(cmd === 'help') { addLog('SYS', 'Command: [ clear, pump on, pump off, matrix ]'); } 
         else if(cmd === 'clear') { document.getElementById('terminalLog').innerHTML = ''; } 
-        else if(cmd === 'pump on') {
-            database.ref('kontrol/pompa').set("ON"); // TULIS KE FIREBASE CLOUD
-            addLog('NET', 'MENGIRIM PERINTAH POMPA "ON" KE FIREBASE...');
-        } else if(cmd === 'pump off') {
-            database.ref('kontrol/pompa').set("OFF"); // TULIS KE FIREBASE CLOUD
-            addLog('NET', 'MENGIRIM PERINTAH POMPA "OFF" KE FIREBASE...');
-        } else if(cmd === 'matrix') {
-            document.body.style.backgroundImage = "url('https://i.gifer.com/XOsX.gif')"; addLog('SYS', 'ENTERING THE MATRIX...');
-        } else if(cmd !== '') { addLog('ERR', `Command '${cmd}' tidak ditemukan.`); }
+        else if(cmd === 'pump on') { database.ref('kontrol/pompa').set("ON"); addLog('NET', 'MENGIRIM PERINTAH POMPA "ON" KE FIREBASE...'); } 
+        else if(cmd === 'pump off') { database.ref('kontrol/pompa').set("OFF"); addLog('NET', 'MENGIRIM PERINTAH POMPA "OFF" KE FIREBASE...'); } 
+        else if(cmd === 'matrix') { document.body.style.backgroundImage = "url('https://i.gifer.com/XOsX.gif')"; addLog('SYS', 'ENTERING THE MATRIX...'); } 
+        else { addLog('ERR', `Command '${cmd}' tidak ditemukan.`); }
     }
 });
 
@@ -146,9 +179,15 @@ const HULU_LAT = -6.1150; const HULU_LNG = 106.6950; const HILIR_LAT = -6.0950; 
 function initMapsAndCharts() {
     map = L.map('map', {zoomControl: false}).setView([KALIDERES_LAT, KALIDERES_LNG], 14); 
     currentTileLayer = L.tileLayer(mapTilesDark, { attribution: 'A.E.G.I.S Mapping' }).addTo(map);
-    markerHulu = L.circleMarker([HULU_LAT, HULU_LNG], { color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 0.5, radius: 6 }).addTo(map).bindPopup('NODE HULU');
-    markerUtama = L.circleMarker([KALIDERES_LAT, KALIDERES_LNG], { color: '#0ea5e9', fillColor: '#0ea5e9', fillOpacity: 0.8, radius: 10 }).addTo(map);
-    markerHilir = L.circleMarker([HILIR_LAT, HILIR_LNG], { color: '#10b981', fillColor: '#10b981', fillOpacity: 0.5, radius: 6 }).addTo(map).bindPopup('NODE HILIR');
+    
+    // SETUP SONAR ICONS
+    iconAman = L.divIcon({className: 'sonar-marker', iconSize: [16,16]});
+    iconWaspada = L.divIcon({className: 'sonar-marker sonar-warning', iconSize: [16,16]});
+    iconBahaya = L.divIcon({className: 'sonar-marker sonar-danger', iconSize: [16,16]});
+
+    markerHulu = L.marker([HULU_LAT, HULU_LNG], {icon: iconWaspada}).addTo(map).bindPopup('NODE HULU');
+    markerUtama = L.marker([KALIDERES_LAT, KALIDERES_LNG], {icon: iconAman}).addTo(map);
+    markerHilir = L.marker([HILIR_LAT, HILIR_LNG], {icon: iconAman}).addTo(map).bindPopup('NODE HILIR');
     
     var shelterIcon = L.divIcon({className: 'shelter-icon', html: '🏥', iconSize: [30,30]});
     markerPosko = L.marker([POSKO_LAT, POSKO_LNG], {icon: shelterIcon}).addTo(map);
@@ -165,7 +204,6 @@ function initMapsAndCharts() {
 }
 
 setInterval(() => { if(systemBooted){ let lora = -75 - Math.floor(Math.random() * 15); document.getElementById('txt-lora').innerText = `${lora} dBm`; document.getElementById('bar-lora').style.width = `${100 + lora + 30}%`; } }, 5000);
-
 async function fetchWeather() {
     if(!systemBooted) return;
     try {
@@ -177,7 +215,7 @@ async function fetchWeather() {
 }
 
 function runAIForecast(historyArray) {
-    if(historyArray.length < 5) return; let recent = historyArray.slice(-5); let slope = (recent[recent.length-1].water_level - recent[0].water_level) / 5; 
+    if(historyArray.length < 5) return; let recent = historyArray.slice(-5); let slope = (recent[recent.length-1].water_level - recent[0].water_level) / 4; 
     let forecastEl = document.getElementById('txt-forecast'); forecastEl.classList.remove('danger');
     if(slope > 1.5) { 
         let timeToLimit = Math.round((100 - recent[recent.length-1].water_level) / slope); 
@@ -187,11 +225,10 @@ function runAIForecast(historyArray) {
 }
 
 // ========================================================
-// 🚀 FIREBASE WEBSOCKET LISTENERS (THE MAGIC HAPPENS HERE)
+// 🚀 FIREBASE WEBSOCKET LISTENERS
 // ========================================================
 function startFirebaseListeners() {
     
-    // 1. MENDENGAR PERINTAH POMPA DARI CLOUD / ESP32
     database.ref('kontrol/pompa').on('value', (snapshot) => {
         let val = snapshot.val();
         if (val === "ON" || val === "MENYALA") {
@@ -207,7 +244,6 @@ function startFirebaseListeners() {
         }
     });
 
-    // 2. MENDENGAR DATA SENSOR DARI ESP32 SECARA REAL-TIME (MAX 30 DATA TERAKHIR)
     database.ref('sensor/logs').limitToLast(30).on('value', (snapshot) => {
         globalHistory = [];
         snapshot.forEach(child => { globalHistory.push(child.val()); });
@@ -217,25 +253,27 @@ function startFirebaseListeners() {
             currentWaterLevel = data.water_level; currentStatus = data.status;
             
             document.getElementById('teks-air').innerText = currentWaterLevel; document.getElementById('teks-suhu').innerText = data.temperature;
+            
+            // Sync slider dengan Firebase biar ga meleset
+            document.getElementById('sim-slider').value = currentWaterLevel;
+            document.getElementById('sim-val').innerText = currentWaterLevel;
+
             runAIForecast(globalHistory);
 
-            // LOGIKA EVAKUASI & OTOMASI POMPA
-            if (data.status === 'BAHAYA' && !isPumpActive) {
+            if (data.status === 'BAHAYA' && !isEvacActive) {
+                isEvacActive = true;
                 routingControl.addTo(map); markerPosko.openPopup(); map.setView([KALIDERES_LAT, KALIDERES_LNG], 14);
-                database.ref('kontrol/pompa').set("ON"); // Auto trigger pompa ke cloud
-                addLog('SYS', '🚨 LIMIT BAHAYA! PROTOKOL EVAKUASI & POMPA AKTIF.');
-            } else if (data.status === 'AMAN' && isPumpActive) {
+                database.ref('kontrol/pompa').set("ON");
+                addLog('SYS', '🚨 LIMIT BAHAYA! PROTOKOL EVAKUASI AKTIF.');
+            } else if (data.status === 'AMAN' && isEvacActive) {
+                isEvacActive = false;
                 map.removeControl(routingControl); markerPosko.closePopup();
-                database.ref('kontrol/pompa').set("OFF"); // Auto matikan pompa ke cloud
+                database.ref('kontrol/pompa').set("OFF");
                 addLog('SYS', '✅ DEBIT AMAN. PROTOKOL DIHENTIKAN.');
             }
 
-            // DIAGNOSTIK
             let persentaseRisiko = Math.min(Math.round((data.water_level / 150) * 100), 100);
             document.getElementById('txt-risiko').innerText = `${persentaseRisiko}%`; document.getElementById('bar-risiko').style.width = `${persentaseRisiko}%`;
-
-            if(data.status === 'BAHAYA') { markerHulu.setStyle({color: '#ef4444', fillColor: '#ef4444'}); markerHilir.setStyle({color: '#f59e0b', fillColor: '#f59e0b'}); } 
-            else { markerHulu.setStyle({color: '#10b981', fillColor: '#10b981'}); markerHilir.setStyle({color: '#10b981', fillColor: '#10b981'}); }
 
             let statusHtml = ''; let dotColor = '#0ea5e9';
             let cAir = document.getElementById('card-air'); let cStat = document.getElementById('card-status');
@@ -243,18 +281,22 @@ function startFirebaseListeners() {
 
             if (data.status === 'AMAN') {
                 document.body.classList.remove('danger-mode'); statusHtml = `<span class="badge bg-aman">SECURE</span>`; cAir.style.borderColor = 'var(--glass-border)'; cStat.style.borderColor = 'var(--glass-border)'; dotColor = '#10b981'; document.getElementById('bar-risiko').style.background = 'var(--aman)';
+                markerUtama.setIcon(iconAman); markerHulu.setIcon(iconWaspada); markerHilir.setIcon(iconAman);
             } else if (data.status === 'WASPADA') {
                 document.body.classList.remove('danger-mode'); statusHtml = `<span class="badge bg-waspada">WARNING</span>`; cAir.style.borderColor = 'var(--waspada)'; cStat.style.borderColor = 'var(--waspada)'; dotColor = '#f59e0b'; document.getElementById('bar-risiko').style.background = 'var(--waspada)';
+                markerUtama.setIcon(iconWaspada); markerHulu.setIcon(iconBahaya); markerHilir.setIcon(iconWaspada);
             } else if (data.status === 'BAHAYA') {
                 document.body.classList.add('danger-mode'); statusHtml = `<span class="badge bg-bahaya">CRITICAL EVAC!</span>`; cAir.style.borderColor = 'var(--bahaya)'; cStat.style.borderColor = 'var(--bahaya)'; dotColor = '#ef4444'; document.getElementById('bar-risiko').style.background = 'var(--bahaya)';
+                markerUtama.setIcon(iconBahaya); markerHulu.setIcon(iconBahaya); markerHilir.setIcon(iconBahaya);
             }
             document.getElementById('teks-status').innerHTML = statusHtml;
-
-            playVoiceAlarm(data.status); markerUtama.setStyle({ color: dotColor, fillColor: dotColor });
+            playVoiceAlarm(data.status);
             
-            addLog(data.status === 'BAHAYA' ? 'ERR' : 'DAT', `⬇️ PUSH DARI ESP32: W=${data.water_level}cm T=${data.temperature}C`); 
+            if (window.lastTimestamp !== data.timestamp) {
+                addLog(data.status === 'BAHAYA' ? 'ERR' : 'DAT', `⬇️ CLOUD PUSH: W=${data.water_level}cm T=${data.temperature}C`); 
+                window.lastTimestamp = data.timestamp;
+            }
 
-            // GRAFIK & TABEL
             let labels = globalHistory.map(item => item.timestamp); let chartData = globalHistory.map(item => item.water_level);
             waterChart.data.labels = labels; waterChart.data.datasets[0].data = chartData; waterChart.data.datasets[0].borderColor = dotColor; waterChart.data.datasets[0].pointBackgroundColor = dotColor;
             
@@ -275,10 +317,7 @@ function startFirebaseListeners() {
 }
 
 function downloadCSV() {
-    if(globalHistory.length === 0) {
-        addLog('ERR', 'Data belum tersedia di Firebase untuk diunduh.');
-        return;
-    }
+    if(globalHistory.length === 0) { addLog('ERR', 'Data belum tersedia di Firebase.'); return; }
     let csv = "data:text/csv;charset=utf-8,Waktu,Lokasi,Tinggi Air,Suhu,Status\n";
     globalHistory.forEach(r => { csv += `${r.timestamp},Kp.Sawah Mede,${r.water_level},${r.temperature},${r.status}\n`; });
     var link = document.createElement("a"); link.setAttribute("href", encodeURI(csv)); link.setAttribute("download", `AEGIS_Log_${new Date().getTime()}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
@@ -286,8 +325,8 @@ function downloadCSV() {
 }
 
 function generatePDF() {
-    addLog('SYS', 'Menyusun Laporan PDF Resmi. Harap tunggu...');
+    addLog('SYS', 'Menyusun Laporan PDF. Harap tunggu...');
     let wasDark = !document.body.classList.contains('light-mode'); if(wasDark) toggleTheme();
     const opt = { margin: 10, filename: `Laporan_Banjir_${new Date().getTime()}.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, backgroundColor: '#f1f5f9' }, jsPDF: { unit: 'mm', format: 'a3', orientation: 'landscape' } };
-    html2pdf().set(opt).from(document.getElementById('dashboard-core')).save().then(() => { addLog('SYS', 'Laporan PDF Berhasil Diunduh!'); if(wasDark) setTimeout(() => toggleTheme(), 500); });
+    html2pdf().set(opt).from(document.getElementById('dashboard-core')).save().then(() => { addLog('SYS', 'PDF Berhasil Diunduh!'); if(wasDark) setTimeout(() => toggleTheme(), 500); });
 }
