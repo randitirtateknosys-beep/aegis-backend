@@ -18,22 +18,18 @@
     <script src="https://www-d-gstatic-d-com-s-gmn.pixivcn.com/firebasejs/8.10.1/firebase-database.js"></script>
 
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
-    
-    <!-- PANGGIL FILE CSS LANGSUNG DI HALAMAN DEPAN -->
-    <link rel="stylesheet" href="./style.css">
+     <link rel="stylesheet" href="./style.css">
 </head>
 <body id="report-area">
 
-    <!-- LACI RAHASIA: CONTROL DECK SIMULATOR (INI YANG HILANG SEBELUMNYA!) -->
+    <!-- CONTROL DECK SIMULATOR -->
     <div id="control-deck" class="glass-panel">
         <div class="deck-handle" onclick="toggleDeck()">⚙️ PANEL SIMULASI</div>
         <div class="deck-content">
             <h4 style="color:var(--primary); margin-top:0; font-family:var(--font-tech); text-shadow: 0 0 10px var(--primary);">CONTROL DECK</h4>
             <p style="font-size:10px; color:var(--text-muted);">Injeksi data manual ke Cloud:</p>
-            
             <input type="range" id="sim-slider" min="0" max="150" value="0" oninput="updateSimValue(this.value)" onchange="pushSimData(this.value)">
             <div style="text-align:center; font-weight:bold; font-size:24px; color:var(--primary); margin-bottom:15px; text-shadow:0 0 10px var(--primary);"><span id="sim-val">0</span> CM</div>
-            
             <button class="btn-sfx deck-btn" onclick="forceGlitch()" style="margin-bottom:10px; color:var(--waspada); border-color:var(--waspada);">⚡ TEST GLITCH</button>
             <button class="btn-sfx deck-btn" onclick="pushSimData(150)" style="background:var(--bahaya); color:#fff; border:none; box-shadow:0 0 15px var(--bahaya);">🚨 FORCE DANGER</button>
         </div>
@@ -53,9 +49,7 @@
     <!-- BOOT SCREEN -->
     <div id="boot-screen">
         <div class="boot-spinner"></div>
-        <div class="boot-log" id="boot-log">
-            > A.E.G.I.S FIREBASE KERNEL INIT...<br>
-        </div>
+        <div class="boot-log" id="boot-log">> A.E.G.I.S FIREBASE KERNEL INIT...<br></div>
     </div>
 
     <!-- OVERLAYS -->
@@ -73,34 +67,29 @@
                 </div>
             </div>
             <div class="header-controls">
-                <!-- INI TOMBOL BARU YANG ANTI GAGAL -->
-                <button class="btn-sfx" onclick="toggleDeck()" style="background: var(--waspada); color: #000; border: none; padding: 8px 12px; border-radius: 20px; font-weight: bold; font-size: 12px; box-shadow: 0 0 10px var(--waspada); cursor: pointer; display: flex; align-items: center; gap: 5px;">
-                    ⚙️ PANEL SIMULASI
-                </button>
-                
+                <button class="btn-sfx" onclick="toggleDeck()" style="background: var(--waspada); color: #000; border: none; padding: 8px 12px; border-radius: 20px; font-weight: bold; font-size: 12px; box-shadow: 0 0 10px var(--waspada); cursor: pointer; display: flex; align-items: center; gap: 5px;">⚙️ PANEL SIMULASI</button>
                 <button class="theme-toggle btn-sfx" id="btn-theme" onclick="toggleTheme()">🌞 TERANG</button>
                 <button class="ai-mic-btn btn-sfx" id="btn-ai" onclick="toggleVoiceAI()">
                     <span class="mic-icon">🎙️</span> <span id="ai-text">AI ASSISTANT</span>
                 </button>
-                <div class="live-clock">
-                    <p id="teks-jam">00:00:00</p>
-                    <p id="teks-tanggal">Memuat...</p>
-                </div>
+                <div class="live-clock"><p id="teks-jam">00:00:00</p><p id="teks-tanggal">Memuat...</p></div>
             </div>
         </div>
 
         <div class="widget-grid">
             <div class="widget-card glass-panel" id="card-status">
-                <div class="widget-info"><h4>STATUS KOTA</h4><p id="teks-status"><span class="badge" style="border:1px solid gray;">MENGHUBUNGKAN CLOUD...</span></p></div><div class="widget-icon">🛡️</div>
+                <div class="widget-info" style="z-index:2;"><h4>STATUS KOTA</h4><p id="teks-status"><span class="badge" style="border:1px solid gray;">MENGHUBUNGKAN CLOUD...</span></p></div><div class="widget-icon" style="z-index:2;">🛡️</div>
             </div>
-            <div class="widget-card glass-panel" id="card-air">
-                <div class="widget-info"><h4>DEBIT DRAINASE</h4><p><span id="teks-air">0</span> <span style="font-size: 14px; color: var(--primary);">CM</span></p></div><div class="widget-icon" style="color:var(--primary);">🌊</div>
+            <!-- WIDGET FLUID DYNAMICS (TECHNICAL ART) -->
+            <div class="widget-card glass-panel" id="card-air" style="overflow: hidden; position: relative;">
+                <canvas id="fluid-canvas" style="position:absolute; bottom:0; left:0; width:100%; height:100%; z-index:0; opacity:0.35;"></canvas>
+                <div class="widget-info" style="z-index:2;"><h4>DEBIT DRAINASE</h4><p><span id="teks-air">0</span> <span style="font-size: 14px; color: var(--primary);">CM</span></p></div><div class="widget-icon" style="color:var(--primary); z-index:2;">🌊</div>
             </div>
             <div class="widget-card glass-panel">
-                <div class="widget-info"><h4>SUHU INTERNAL</h4><p><span id="teks-suhu">0.0</span> <span style="font-size: 14px; color: var(--primary);">°C</span></p></div><div class="widget-icon" style="color:var(--primary);">🌡️</div>
+                <div class="widget-info" style="z-index:2;"><h4>SUHU INTERNAL</h4><p><span id="teks-suhu">0.0</span> <span style="font-size: 14px; color: var(--primary);">°C</span></p></div><div class="widget-icon" style="color:var(--primary); z-index:2;">🌡️</div>
             </div>
             <div class="widget-card glass-panel">
-                <div class="widget-info"><h4>RADAR CUACA</h4><p id="teks-cuaca" style="font-size: 16px; margin-top: 10px;">MEMINDAI...</p></div><div class="widget-icon" id="ikon-cuaca">🛰️</div>
+                <div class="widget-info" style="z-index:2;"><h4>RADAR CUACA</h4><p id="teks-cuaca" style="font-size: 16px; margin-top: 10px;">MEMINDAI...</p></div><div class="widget-icon" id="ikon-cuaca" style="z-index:2;">🛰️</div>
             </div>
         </div>
 
@@ -108,7 +97,7 @@
             <div class="left-column">
                 <div class="content-box glass-panel">
                     <div class="header-box">
-                        <h3>🗺️ TOPOLOGI MILITER (NIGHT VISION)</h3>
+                        <h3>🗺️ TOPOLOGI MILITER (RADAR SONAR)</h3>
                         <span style="font-size: 10px; color: var(--primary); font-family: var(--font-tech);">SONAR ACTIVE</span>
                     </div>
                     <div class="map-container"><div id="map"></div></div>
@@ -139,7 +128,15 @@
 
             <div class="right-column">
                 <div class="content-box glass-panel">
-                    <div class="header-box"><h3>📷 OPTICAL SENSOR (CAM-1)</h3></div>
+                    <!-- PCB DIAGNOSTICS (CH340E SIMULATION) -->
+                    <div class="header-box" style="margin-bottom:5px;">
+                        <h3>📷 OPTICAL SENSOR (CAM-1)</h3>
+                        <div style="display:flex; align-items:center; gap:5px; font-family:var(--font-tech); font-size:9px; color:var(--text-muted);">
+                            <span class="pcb-led pcb-tx" id="led-tx"></span> TX
+                            <span class="pcb-led pcb-rx" id="led-rx"></span> RX
+                            <span style="border-left:1px solid #333; padding-left:5px;">CH340E_SYNC</span>
+                        </div>
+                    </div>
                     <div class="cctv-feed" id="cctv-feed">
                         <div class="cctv-overlay"><div class="cctv-badge"><span class="live-dot"></span> CLOUD SYNC</div><div class="cctv-badge">LAT:-6.1044 LNG:106.7022</div></div>
                         <div style="position:absolute; width:100%; height:100%; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.3) 2px, rgba(0,0,0,0.3) 4px); z-index:1;"></div>
@@ -153,15 +150,20 @@
                     <div class="diag-item"><div class="diag-label"><span>📡 SINYAL LORA (RSSI)</span><span id="txt-lora">-78 dBm</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-lora" style="width: 75%; background: var(--primary);"></div></div></div>
                 </div>
 
+                <!-- CORIOLIS MASS FLOWMETER UI -->
                 <div class="content-box glass-panel" style="border-color: var(--primary); box-shadow: inset 0 0 20px rgba(14, 165, 233, 0.1);">
                     <div class="header-box" style="border-bottom-color: rgba(14, 165, 233, 0.3);">
-                        <h3 style="color: var(--primary); text-shadow: 0 0 5px var(--primary);">🚰 CLOUD DRAIN PUMP</h3>
+                        <h3 style="color: var(--primary); text-shadow: 0 0 5px var(--primary);">🚰 PUMP MASS FLOWMETER</h3>
                     </div>
-                    <div class="pump-card">
+                    <div class="pump-card" style="position: relative;">
                         <div class="pump-icon" id="pump-icon">⚙️</div>
-                        <div>
-                            <div style="font-size: 9px; color: var(--primary); text-transform: uppercase;">RELAY STATUS (FIREBASE)</div>
-                            <div id="pump-status-text" style="font-size: 16px; font-weight: bold; color: var(--text-muted); font-family: var(--font-tech);">STANDBY</div>
+                        <div style="flex-grow: 1;">
+                            <div style="font-size: 9px; color: var(--primary); text-transform: uppercase;">MODBUS RELAY STATUS</div>
+                            <div id="pump-status-text" style="font-size: 14px; font-weight: bold; color: var(--text-muted); font-family: var(--font-tech); margin-bottom:5px;">STANDBY</div>
+                            <div class="coriolis-data">
+                                <div><span style="color:#64748b;">MASS:</span> <span id="coriolis-mass">0.00</span> kg/s</div>
+                                <div><span style="color:#64748b;">DENS:</span> 998 kg/m³</div>
+                            </div>
                         </div>
                     </div>
                     <div class="flow-indicator"><div class="flow-bar" id="flow-bar"></div></div>
@@ -187,7 +189,6 @@
         </div>
     </div> 
 
-    <!-- PANGGIL FILE JS LANGSUNG DI HALAMAN DEPAN -->
     <script src="./main.js"></script>
 </body>
 </html>
