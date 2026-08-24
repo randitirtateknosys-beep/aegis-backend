@@ -204,14 +204,16 @@ document.getElementById('cmd-input').addEventListener('keypress', function(e) {
 });
 
 // ==========================================
-// INI BAGIAN YANG SEMPAT TERHAPUS! (KOORDINAT GPS)
+// INI DIA KOORDINAT GPS YANG BIKIN MAPS PUTIH!
 // ==========================================
 let markerUtama, markerHulu, markerHilir, markerPosko;
 const KALIDERES_LAT = -6.1044; const KALIDERES_LNG = 106.7022; 
 const POSKO_LAT = -6.1015; const POSKO_LNG = 106.7085; 
-const HULU_LAT = -6.1150; const HULU_LNG = 106.6950; const HILIR_LAT = -6.0950; const HILIR_LNG = 106.7150;
+const HULU_LAT = -6.1150; const HULU_LNG = 106.6950; 
+const HILIR_LAT = -6.0950; const HILIR_LNG = 106.7150;
 
 function initMapsAndCharts() {
+    // FIX: Memastikan peta meload dark-mode standar
     map = L.map('map', {zoomControl: false}).setView([KALIDERES_LAT, KALIDERES_LNG], 14); 
     currentTileLayer = L.tileLayer(mapTilesDark, { attribution: 'A.E.G.I.S Mapping' }).addTo(map);
     
