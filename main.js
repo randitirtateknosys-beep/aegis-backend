@@ -17,7 +17,7 @@ let systemBooted = false; let globalHistory = []; window.lastTimestamp = null;
 let iconAman, iconWaspada, iconBahaya;
 
 // ==========================================
-// TECHNICAL ART: FLUID DYNAMICS CANVAS
+// TECHNICAL ART: CFD FLUID DYNAMICS CANVAS
 // ==========================================
 let fluidOffset = 0; let fluidColor = 'rgba(14, 165, 233, 0.4)';
 function renderFluid() {
@@ -31,21 +31,22 @@ function renderFluid() {
     let fluidHeight = fCanvas.height - (currentWaterLevel / 150) * fCanvas.height;
     if (fluidHeight < 20) fluidHeight = 20; if (fluidHeight > fCanvas.height) fluidHeight = fCanvas.height;
 
+    // Persamaan gelombang bertumpuk untuk efek turbulensi fluida
     fCtx.beginPath();
     fCtx.moveTo(0, fCanvas.height);
-    for (let x = 0; x <= fCanvas.width; x += 10) {
-        let y = fluidHeight + Math.sin((x + fluidOffset) * 0.05) * 8;
+    for (let x = 0; x <= fCanvas.width; x += 5) {
+        let y = fluidHeight 
+              + Math.sin((x + fluidOffset) * 0.03) * 6 
+              + Math.cos((x + fluidOffset * 1.5) * 0.05) * 4;
         fCtx.lineTo(x, y);
     }
     fCtx.lineTo(fCanvas.width, fCanvas.height);
-    fCtx.fillStyle = fluidColor;
-    fCtx.fill();
-    fluidOffset += 3;
-    requestAnimationFrame(renderFluid);
+    fCtx.fillStyle = fluidColor; fCtx.fill();
+    fluidOffset += 2.5; requestAnimationFrame(renderFluid);
 }
 
 // ==========================================
-// AUDIO SYSTEM 
+// HI-FI AUDIO SYSTEM
 // ==========================================
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 function playBeep(freq = 800, type = 'sine', duration = 0.1, vol = 0.05) {
@@ -60,7 +61,7 @@ function playBeep(freq = 800, type = 'sine', duration = 0.1, vol = 0.05) {
 document.querySelectorAll('.btn-sfx').forEach(btn => { btn.addEventListener('click', () => playBeep(1200, 'square', 0.1)); });
 
 // ==========================================
-// YOLOv10n AI SIMULATION (KEJUTAN!)
+// YOLOv10n AI SIMULATION
 // ==========================================
 let yoloActive = false; let yoloInterval;
 window.toggleYolo = function() {
@@ -82,9 +83,7 @@ window.toggleYolo = function() {
     }
 }
 
-function simulatePCB() {
-    setInterval(() => { document.getElementById('led-rx').classList.toggle('active'); if(Math.random() > 0.5) document.getElementById('led-tx').classList.toggle('active'); }, 150);
-}
+function simulatePCB() { setInterval(() => { document.getElementById('led-rx').classList.toggle('active'); if(Math.random() > 0.5) document.getElementById('led-tx').classList.toggle('active'); }, 150); }
 
 // ==========================================
 // CONTROL DECK & GLITCH
@@ -108,15 +107,13 @@ function verifyLogin() {
     if(pass === 'admin' || pass === 'aegis2026') {
         playBeep(1000, 'square', 0.2, 0.1); document.getElementById('login-screen').style.opacity = '0';
         setTimeout(() => { document.getElementById('login-screen').style.visibility = 'hidden'; startBootSequence(); }, 1000);
-    } else {
-        playBeep(200, 'sawtooth', 0.3, 0.1); document.getElementById('login-error').style.display = 'block'; document.getElementById('pass-input').value = '';
-    }
+    } else { playBeep(200, 'sawtooth', 0.3, 0.1); document.getElementById('login-error').style.display = 'block'; document.getElementById('pass-input').value = ''; }
 }
 
 function startBootSequence() {
     document.getElementById('boot-screen').style.visibility = 'visible'; document.getElementById('boot-screen').style.opacity = '1';
     const bootLog = document.getElementById('boot-log');
-    const messages = [ "> MENGHUBUNGKAN KE FIREBASE WEBSOCKET...", "> MENGKALIBRASI CH340E SERIAL COM...", "> MEMUAT CORIOLIS MASS DIAGNOSTICS...", "> MEMUAT RADAR SONAR MULTI-NODE...", "> SISTEM A.E.G.I.S CLOUD SIAP." ];
+    const messages = [ "> MENGHUBUNGKAN KE FIREBASE WEBSOCKET...", "> MENGKALIBRASI CH340E SERIAL COM...", "> MEMUAT LOCAL MEMORY STACK...", "> MEMUAT RADAR SONAR MULTI-NODE...", "> SISTEM A.E.G.I.S CLOUD SIAP." ];
     let i = 0;
     let bootInterval = setInterval(() => {
         if(i < messages.length) { bootLog.innerHTML += messages[i] + "<br>"; playBeep(400 + (i*100), 'square', 0.05, 0.02); i++; } 
@@ -139,45 +136,57 @@ function toggleTheme() {
 }
 
 // ==========================================
-// AI ASSISTANT (NLP BRAIN UPGRADE)
+// AI ASSISTANT (LOCAL MEMORY & NLP UPGRADE)
 // ==========================================
-let aiListening = false; const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition; const recognition = SpeechRecognition ? new SpeechRecognition() : null;
+let aiListening = false; let aiTimeout;
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition; const recognition = SpeechRecognition ? new SpeechRecognition() : null;
 if(recognition) {
-    recognition.lang = 'id-ID'; recognition.continuous = false;
+    recognition.lang = 'id-ID'; 
+    recognition.continuous = true; // FIX: Tidak akan memotong omongan seketika
+    recognition.interimResults = false;
+    
     recognition.onresult = function(e) {
-        const perintah = e.results[0][0].transcript.toLowerCase(); addLog('AI', `In: "${perintah}"`);
-        let jawaban = "Instruksi tidak dipahami. Coba tanyakan status, suhu, atau laporan sistem.";
+        clearTimeout(aiTimeout);
+        const perintah = e.results[e.results.length - 1][0].transcript.toLowerCase(); addLog('AI', `In: "${perintah}"`);
+        let jawaban = "Sistem gagal menemukan referensi dalam memori lokal. Harap ulangi instruksi.";
         
         if(perintah.includes('air') || perintah.includes('banjir') || perintah.includes('debit')) { 
-            jawaban = `Tinggi air saat ini ${currentWaterLevel} sentimeter. Status: ${currentStatus}.`; 
-        } else if(perintah.includes('cuaca')) { 
-            jawaban = `Radar mendeteksi cuaca Kalideres saat ini ${document.getElementById('teks-cuaca').innerText}.`; 
-        } else if(perintah.includes('pompa') || perintah.includes('modbus')) { 
-            jawaban = isPumpActive ? `Pompa sedang aktif dengan aliran massa ${document.getElementById('coriolis-mass').innerText} kilogram per detik.` : "Mesin pompa dalam posisi standby."; 
+            jawaban = `Debit air saat ini ${currentWaterLevel} sentimeter. Kalkulasi sistem berada pada status ${currentStatus}.`; 
+        } else if(perintah.includes('cuaca') || perintah.includes('langit')) { 
+            jawaban = `Pemindaian satelit menunjukkan cuaca ${document.getElementById('teks-cuaca').innerText} di wilayah pantauan.`; 
+        } else if(perintah.includes('pompa') || perintah.includes('modbus') || perintah.includes('mesin')) { 
+            jawaban = isPumpActive ? `Mesin pompa aktif. Laju massa aliran tercatat ${document.getElementById('coriolis-mass').innerText} kilogram per detik.` : "Relay pompa dalam keadaan siaga."; 
         } else if(perintah.includes('suhu') || perintah.includes('temperatur')) {
-            jawaban = `Suhu internal sistem saat ini ${document.getElementById('teks-suhu').innerText} derajat celcius.`;
+            jawaban = `Termal sirkuit internal stabil di angka ${document.getElementById('teks-suhu').innerText} derajat celcius.`;
         } else if(perintah.includes('baterai') || perintah.includes('daya')) {
-            jawaban = `Sisa daya baterai perangkat keras adalah ${document.getElementById('txt-batt').innerText}.`;
+            jawaban = `Kapasitas daya tersisa ${document.getElementById('txt-batt').innerText}.`;
         } else if(perintah.includes('sinyal') || perintah.includes('lora')) {
-            jawaban = `Kekuatan sinyal radio Lora menunjukkan ${document.getElementById('txt-lora').innerText}. Konektivitas stabil.`;
+            jawaban = `Kekuatan sinyal frekuensi radio terpantau pada ${document.getElementById('txt-lora').innerText}.`;
         } else if(perintah.includes('risiko') || perintah.includes('limpasan')) {
-            jawaban = `Kalkulasi kecerdasan buatan menunjukkan risiko limpasan sebesar ${document.getElementById('txt-risiko').innerText}.`;
+            jawaban = `Indikator risiko limpasan saat ini ${document.getElementById('txt-risiko').innerText}.`;
         } else if(perintah.includes('laporan') || perintah.includes('semua') || perintah.includes('sistem')) {
-            jawaban = `Laporan total A.E.G.I.S: Air ${currentWaterLevel} senti, Suhu ${document.getElementById('teks-suhu').innerText} derajat, Baterai ${document.getElementById('txt-batt').innerText}. Seluruh sensor beroperasi normal.`;
+            jawaban = `Diagnosis penuh: Air ${currentWaterLevel} senti, Suhu ${document.getElementById('teks-suhu').innerText} derajat, Baterai ${document.getElementById('txt-batt').innerText}. Sinyal Lora ${document.getElementById('txt-lora').innerText}. Seluruh instrumen beroperasi normal.`;
         }
 
         addLog('AI', `Out: "${jawaban}"`); 
-        let msg = new SpeechSynthesisUtterance(jawaban); 
-        msg.lang = 'id-ID'; msg.pitch = 1.1; msg.rate = 0.95; // Kecepatan bicara dibuat natural
+        let msg = new SpeechSynthesisUtterance(jawaban); msg.lang = 'id-ID'; msg.pitch = 1.1; msg.rate = 0.95; 
         window.speechSynthesis.speak(msg); 
-        toggleVoiceAI(true);
+        recognition.stop(); // Stop setelah menjawab agar tidak looping
+    };
+
+    recognition.onstart = function() {
+        // FIX: Beri waktu 6 detik untuk mikir/bernafas sebelum AI mematikan mic
+        aiTimeout = setTimeout(() => {
+            if(aiListening) { addLog('AI', 'Membatalkan sesi dengar (Timeout).'); toggleVoiceAI(true); }
+        }, 6000); 
     };
     recognition.onerror = function() { toggleVoiceAI(true); }; recognition.onend = function() { if(aiListening) toggleVoiceAI(true); }
 }
+
 function toggleVoiceAI(forceOff = false) {
     if(!recognition) return; let btn = document.getElementById('btn-ai'); let txt = document.getElementById('ai-text');
     try {
-        if(aiListening || forceOff) { recognition.stop(); aiListening = false; btn.classList.remove('listening'); txt.innerText = "AI ASSISTANT"; } 
+        if(aiListening || forceOff) { recognition.stop(); clearTimeout(aiTimeout); aiListening = false; btn.classList.remove('listening'); txt.innerText = "AI ASSISTANT"; } 
         else { recognition.start(); aiListening = true; btn.classList.add('listening'); txt.innerText = "LISTENING..."; let msg = new SpeechSynthesisUtterance("Mendengarkan instruksi komandan."); msg.lang = 'id-ID'; window.speechSynthesis.speak(msg); }
     } catch (e) {}
 }
@@ -218,7 +227,7 @@ document.getElementById('cmd-input').addEventListener('keypress', function(e) {
 });
 
 // ==========================================
-// KOORDINAT GPS & LABEL NODE UTAMA
+// KOORDINAT GPS & TOOLTIP PERMANEN
 // ==========================================
 let markerUtama, markerHulu, markerHilir, markerPosko;
 const KALIDERES_LAT = -6.1044; const KALIDERES_LNG = 106.7022; 
@@ -234,9 +243,11 @@ function initMapsAndCharts() {
     iconBahaya = L.divIcon({className: 'sonar-marker sonar-danger', iconSize: [16,16]});
 
     markerHulu = L.marker([HULU_LAT, HULU_LNG], {icon: iconWaspada}).addTo(map).bindPopup('NODE HULU');
-    // FIX: Memberi nama pada Node Utama Markas
-    markerUtama = L.marker([KALIDERES_LAT, KALIDERES_LNG], {icon: iconAman}).addTo(map).bindPopup('<div style="text-align:center; font-family:monospace;"><b style="font-size:12px; color:#0ea5e9;">NODE UTAMA</b><br>KP. SAWAH MEDE</div>');
     markerHilir = L.marker([HILIR_LAT, HILIR_LNG], {icon: iconAman}).addTo(map).bindPopup('NODE HILIR');
+    
+    // FIX: Teks NODE UTAMA menyala permanen tanpa perlu diklik!
+    markerUtama = L.marker([KALIDERES_LAT, KALIDERES_LNG], {icon: iconAman}).addTo(map)
+        .bindTooltip('<div style="font-family:monospace; font-weight:bold; letter-spacing:1px; color:#0ea5e9;">[ NODE UTAMA ]</div>', {permanent: true, direction: 'top', className: 'custom-tooltip', offset: [0, -10]});
     
     var shelterIcon = L.divIcon({className: 'shelter-icon', html: '🏥', iconSize: [30,30]});
     markerPosko = L.marker([POSKO_LAT, POSKO_LNG], {icon: shelterIcon}).addTo(map);
@@ -273,7 +284,7 @@ function runAIForecast(historyArray) {
     } else { forecastEl.innerHTML = `AI PREDIKSI: DEBIT AMAN`; forecastEl.style.color = 'var(--primary)'; }
 }
 
-let previousStatus = "AMAN"; // Memori untuk notifikasi Aman
+let previousStatus = null; // FIX: Memori logis untuk notifikasi Aman
 
 function startFirebaseListeners() {
     database.ref('kontrol/pompa').on('value', (snapshot) => {
@@ -310,14 +321,16 @@ function startFirebaseListeners() {
                 addLog('SYS', '✅ DEBIT AMAN. PROTOKOL DIHENTIKAN.');
             }
 
-            // FIX: LOGIKA NOTIFIKASI KEMBALI AMAN (HANYA BERLAKU JIKA SEBELUMNYA BANJIR/WASPADA)
-            if (systemBooted && (previousStatus === 'BAHAYA' || previousStatus === 'WASPADA') && data.status === 'AMAN') {
-                playBeep(1000, 'sine', 0.4, 0.1);
-                let msg = new SpeechSynthesisUtterance("Perhatian. Debit air telah surut. Kondisi kembali aman.");
-                msg.lang = 'id-ID'; window.speechSynthesis.speak(msg);
-                addLog('SYS', '🔈 NOTIFIKASI: KONDISI KEMBALI AMAN.');
+            // FIX: LOGIKA NOTIFIKASI KEMBALI AMAN ANTI-BOCOR
+            if (systemBooted && previousStatus !== null) {
+                if ((previousStatus === 'BAHAYA' || previousStatus === 'WASPADA') && data.status === 'AMAN') {
+                    playBeep(1000, 'sine', 0.4, 0.1);
+                    let msg = new SpeechSynthesisUtterance("Perhatian. Debit air telah surut. Kondisi markas kembali aman.");
+                    msg.lang = 'id-ID'; window.speechSynthesis.speak(msg);
+                    addLog('SYS', '🔈 NOTIFIKASI: KONDISI KEMBALI AMAN.');
+                }
             }
-            previousStatus = data.status;
+            if (systemBooted) { previousStatus = data.status; }
 
             let persentaseRisiko = Math.min(Math.round((data.water_level / 150) * 100), 100);
             document.getElementById('txt-risiko').innerText = `${persentaseRisiko}%`; document.getElementById('bar-risiko').style.width = `${persentaseRisiko}%`;
