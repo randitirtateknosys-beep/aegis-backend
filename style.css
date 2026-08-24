@@ -171,3 +171,6 @@ td { padding: 8px 10px; border-bottom: 1px solid rgba(14,165,233,0.1); }
 /* ==== KEJUTAN: YOLOv10n AI VISION BBOX ==== */
 .yolo-bbox { position: absolute; border: 1.5px solid #4ade80; background: rgba(74, 222, 128, 0.1); box-shadow: 0 0 10px rgba(74, 222, 128, 0.4); z-index: 10; transition: all 0.5s ease; }
 .yolo-label { position: absolute; top: -15px; left: -1.5px; background: #4ade80; color: #000; font-family: 'Consolas', monospace; font-size: 9px; font-weight: bold; padding: 1px 4px; white-space: nowrap; }
+/* ==== TOOLTIP NODE UTAMA ==== */
+.custom-tooltip { background: rgba(0, 5, 15, 0.9); border: 1px solid #0ea5e9; box-shadow: 0 0 10px rgba(14, 165, 233, 0.5); color: white; border-radius: 4px; backdrop-filter: blur(5px); }
+.leaflet-tooltip.custom-tooltip::before { border-top-color: #0ea5e9; }
