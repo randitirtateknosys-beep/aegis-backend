@@ -18,7 +18,6 @@
 </head>
 <body id="report-area">
 
-    <!-- CONTROL DECK SIMULATOR -->
     <div id="control-deck" class="glass-panel">
         <div class="deck-content">
             <h4 style="color:var(--primary); margin-top:0; font-family:var(--font-tech); text-shadow: 0 0 10px var(--primary);">CONTROL DECK</h4>
@@ -30,7 +29,6 @@
         </div>
     </div>
 
-    <!-- SECURITY GATEWAY -->
     <div id="login-screen">
         <div class="login-box">
             <h2>A.E.G.I.S</h2>
@@ -41,17 +39,14 @@
         </div>
     </div>
 
-    <!-- BOOT SCREEN -->
     <div id="boot-screen">
         <div class="boot-spinner"></div>
         <div class="boot-log" id="boot-log">> A.E.G.I.S FIREBASE KERNEL INIT...<br></div>
     </div>
 
-    <!-- OVERLAYS -->
     <div id="red-alert-overlay"></div>
     <canvas id="weather-canvas"></canvas>
 
-    <!-- DASHBOARD -->
     <div id="dashboard-core" style="display: none; opacity: 0; transition: opacity 1s;">
         <div class="header glass-panel">
             <div class="header-title">
@@ -62,6 +57,9 @@
                 </div>
             </div>
             <div class="header-controls">
+                <!-- TOMBOL KEJUTAN: 3D HOLOGRAPHIC TACTICAL VIEW -->
+                <button class="btn-sfx" onclick="toggleTactical3D()" style="background: transparent; color: #a855f7; border: 1px solid #a855f7; padding: 8px 12px; border-radius: 20px; font-weight: bold; font-size: 12px; box-shadow: 0 0 10px rgba(168, 85, 247, 0.4); cursor: pointer; display: flex; align-items: center; gap: 5px; margin-right: 5px;">🪐 3D TACTICAL VIEW</button>
+                
                 <button class="btn-sfx" onclick="toggleDeck()" style="background: var(--waspada); color: #000; border: none; padding: 8px 12px; border-radius: 20px; font-weight: bold; font-size: 12px; box-shadow: 0 0 10px var(--waspada); cursor: pointer; display: flex; align-items: center; gap: 5px;">⚙️ PANEL SIMULASI</button>
                 <button class="theme-toggle btn-sfx" id="btn-theme" onclick="toggleTheme()">🌞 TERANG</button>
                 <button class="ai-mic-btn btn-sfx" id="btn-ai" onclick="toggleVoiceAI()"><span class="mic-icon">🎙️</span> <span id="ai-text">AI ASSISTANT</span></button>
@@ -85,7 +83,8 @@
             </div>
         </div>
 
-        <div class="grand-layout">
+        <!-- AREA INI YANG AKAN JADI HOLOGRAM 3D -->
+        <div class="grand-layout" id="hologram-area" style="transition: all 0.8s cubic-bezier(0.25, 0.8, 0.25, 1);">
             <div class="left-column">
                 <div class="content-box glass-panel">
                     <div class="header-box">
@@ -97,7 +96,8 @@
                 <div class="content-box glass-panel">
                     <div class="header-box">
                         <h3>📊 GRAFIK FLUKTUASI DEBIT AIR</h3>
-                        <div id="txt-forecast" class="ai-forecast-badge">AI FORECAST: GATHERING DATA...</div>
+                        <!-- LABEL PREDIKTIF AI -->
+                        <div id="txt-forecast" class="ai-forecast-badge" style="border-color:#ef4444; color:#ef4444;">🧠 AI PREDICTIVE MODEL ACTIVE</div>
                     </div>
                     <div class="chart-container"><canvas id="waterChart"></canvas></div>
                 </div>
@@ -125,13 +125,11 @@
                         <div style="display:flex; align-items:center; gap:5px; font-family:var(--font-tech); font-size:9px; color:var(--text-muted);">
                             <span class="pcb-led pcb-tx" id="led-tx"></span> TX
                             <span class="pcb-led pcb-rx" id="led-rx"></span> RX
-                            <!-- INI TOMBOL KEJUTANNYA -->
                             <button class="btn-export btn-sfx" onclick="toggleYolo()" style="padding:2px 5px; font-size:8px; margin-left:5px; border-color:#4ade80; color:#4ade80;">YOLOv10n AI</button>
                         </div>
                     </div>
                     <div class="cctv-feed" id="cctv-feed">
                         <div class="cctv-overlay"><div class="cctv-badge"><span class="live-dot"></span> CLOUD SYNC</div><div class="cctv-badge">LAT:-6.1044 LNG:106.7022</div></div>
-                        <!-- KANVAS YOLO -->
                         <div id="yolo-canvas" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:5; pointer-events:none; display:none;"></div>
                         <div style="position:absolute; width:100%; height:100%; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.3) 2px, rgba(0,0,0,0.3) 4px); z-index:1;"></div>
                     </div>
@@ -175,12 +173,12 @@
                     <div class="header-box"><h3>💻 CLOUD TERMINAL (ROOT)</h3></div>
                     <div class="terminal-box">
                         <div id="terminalLog"><div class="terminal-line"><span style="color:#64748b;">[INIT]</span> <span style="color:var(--text-main);">A.E.G.I.S Firebase SDK Booting... OK</span></div></div>
-                        <div class="terminal-input-wrapper"><span style="color:#0ea5e9;">cloud@aegis:~#</span><input type="text" id="cmd-input" class="terminal-input" placeholder="Ketik 'pump on' kirim ke Firebase..." autocomplete="off" spellcheck="false"></div>
+                        <div class="terminal-input-wrapper"><span style="color:#0ea5e9;">cloud@aegis:~#</span><input type="text" id="cmd-input" class="terminal-input" placeholder="Ketik 'override aegis'..." autocomplete="off" spellcheck="false"></div>
                     </div>
                 </div>
             </div>
         </div>
     </div> 
-    <script src="./main.js"></script>
+    <script src="./main.js?v=godtier"></script>
 </body>
 </html>
