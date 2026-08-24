@@ -76,16 +76,36 @@ function simulatePCB() {
 }
 
 // CONTROL DECK & GLITCH
-window.toggleDeck = function() { document.getElementById('control-deck').classList.toggle('open'); playBeep(1200, 'square', 0.1); }
-window.updateSimValue = function(val) { document.getElementById('sim-val').innerText = val; playBeep(400 + parseInt(val)*5, 'sine', 0.05, 0.01); }
+window.toggleDeck = function() { 
+    let deck = document.getElementById('control-deck');
+    deck.classList.toggle('open'); 
+    playBeep(1200, 'square', 0.1); 
+}
+window.updateSimValue = function(val) { 
+    document.getElementById('sim-val').innerText = val; 
+    playBeep(400 + parseInt(val)*5, 'sine', 0.05, 0.01); 
+}
 window.pushSimData = function(val) {
     let numVal = parseInt(val); let stat = numVal >= 100 ? "BAHAYA" : (numVal >= 70 ? "WASPADA" : "AMAN");
     let timeStr = new Date().toLocaleTimeString('id-ID', { hour12: false });
-    database.ref('sensor/logs').push({ device_id: "NODE-SIM-1", status: stat, temperature: (28 + Math.random() * 2).toFixed(1), timestamp: timeStr, water_level: numVal });
+    
+    // Inject (Push) Data manual ke Firebase!
+    database.ref('sensor/logs').push({ 
+        device_id: "NODE-SIM-1", 
+        status: stat, 
+        temperature: (28 + Math.random() * 2).toFixed(1), 
+        timestamp: timeStr, 
+        water_level: numVal 
+    });
+    
     addLog('SYS', `SIMULASI AKTIF: Push ${numVal}cm ke Firebase!`);
     if(stat === 'BAHAYA') { forceGlitch(); }
 }
-window.forceGlitch = function() { document.body.classList.add('glitch-effect'); playBeep(100, 'sawtooth', 0.6, 0.3); setTimeout(() => document.body.classList.remove('glitch-effect'), 600); }
+window.forceGlitch = function() { 
+    document.body.classList.add('glitch-effect'); 
+    playBeep(100, 'sawtooth', 0.6, 0.3); 
+    setTimeout(() => document.body.classList.remove('glitch-effect'), 600); 
+}
 
 // LOGIN & BOOT SEQUENCE
 document.getElementById('pass-input').addEventListener('keypress', function(e) { if(e.key === 'Enter') verifyLogin(); });
@@ -184,6 +204,7 @@ document.getElementById('cmd-input').addEventListener('keypress', function(e) {
 });
 
 function initMapsAndCharts() {
+    // FIX: Memastikan peta meload dark-mode standar
     map = L.map('map', {zoomControl: false}).setView([KALIDERES_LAT, KALIDERES_LNG], 14); 
     currentTileLayer = L.tileLayer(mapTilesDark, { attribution: 'A.E.G.I.S Mapping' }).addTo(map);
     
