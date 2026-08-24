@@ -45,69 +45,63 @@ function renderFluid() {
 }
 
 // ==========================================
-// HI-FI AUDIO SYSTEM (Premium Staging)
+// AUDIO SYSTEM 
 // ==========================================
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 function playBeep(freq = 800, type = 'sine', duration = 0.1, vol = 0.05) {
     if(audioCtx.state === 'suspended') audioCtx.resume();
-    let osc1 = audioCtx.createOscillator(); let osc2 = audioCtx.createOscillator(); 
-    let gain = audioCtx.createGain();
-    
+    let osc1 = audioCtx.createOscillator(); let osc2 = audioCtx.createOscillator(); let gain = audioCtx.createGain();
     osc1.type = type; osc1.frequency.setValueAtTime(freq, audioCtx.currentTime);
     osc2.type = 'triangle'; osc2.frequency.setValueAtTime(freq * 1.5, audioCtx.currentTime); 
-    
-    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
-    
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
     osc1.connect(gain); osc2.connect(gain); gain.connect(audioCtx.destination);
-    osc1.start(); osc2.start();
-    osc1.stop(audioCtx.currentTime + duration); osc2.stop(audioCtx.currentTime + duration);
+    osc1.start(); osc2.start(); osc1.stop(audioCtx.currentTime + duration); osc2.stop(audioCtx.currentTime + duration);
 }
 document.querySelectorAll('.btn-sfx').forEach(btn => { btn.addEventListener('click', () => playBeep(1200, 'square', 0.1)); });
 
 // ==========================================
-// PCB DIAGNOSTICS (CH340E TX/RX SIMULATOR)
+// YOLOv10n AI SIMULATION (KEJUTAN!)
 // ==========================================
+let yoloActive = false; let yoloInterval;
+window.toggleYolo = function() {
+    yoloActive = !yoloActive; const yCanvas = document.getElementById('yolo-canvas');
+    if(yoloActive) {
+        yCanvas.style.display = 'block'; addLog('AI', 'MENGAKTIFKAN YOLOv10n OBJECT DETECTION...'); playBeep(1500, 'square', 0.2);
+        yoloInterval = setInterval(() => {
+            yCanvas.innerHTML = ''; let numBoxes = Math.floor(Math.random() * 2) + 1;
+            for(let i=0; i<numBoxes; i++) {
+                let w = 50 + Math.random() * 50; let h = 40 + Math.random() * 40;
+                let x = Math.random() * (yCanvas.clientWidth - w); let y = Math.random() * (yCanvas.clientHeight - h);
+                let conf = (85 + Math.random() * 14).toFixed(1);
+                let classes = ['WATER_LEVEL', 'DEBRIS', 'OBSTACLE']; let cls = classes[Math.floor(Math.random()*classes.length)];
+                yCanvas.innerHTML += `<div class="yolo-bbox" style="width:${w}px; height:${h}px; left:${x}px; top:${y}px;"><div class="yolo-label">${cls} ${conf}%</div></div>`;
+            }
+        }, 1200);
+    } else {
+        yCanvas.style.display = 'none'; clearInterval(yoloInterval); yCanvas.innerHTML = ''; addLog('AI', 'YOLOv10n DINONAKTIFKAN.');
+    }
+}
+
 function simulatePCB() {
-    setInterval(() => {
-        document.getElementById('led-rx').classList.toggle('active');
-        if(Math.random() > 0.5) document.getElementById('led-tx').classList.toggle('active');
-    }, 150);
+    setInterval(() => { document.getElementById('led-rx').classList.toggle('active'); if(Math.random() > 0.5) document.getElementById('led-tx').classList.toggle('active'); }, 150);
 }
 
 // ==========================================
 // CONTROL DECK & GLITCH
 // ==========================================
-window.toggleDeck = function() { 
-    document.getElementById('control-deck').classList.toggle('open'); 
-    playBeep(1200, 'square', 0.1); 
-}
-window.updateSimValue = function(val) { 
-    document.getElementById('sim-val').innerText = val; 
-    playBeep(400 + parseInt(val)*5, 'sine', 0.05, 0.01); 
-}
+window.toggleDeck = function() { document.getElementById('control-deck').classList.toggle('open'); playBeep(1200, 'square', 0.1); }
+window.updateSimValue = function(val) { document.getElementById('sim-val').innerText = val; playBeep(400 + parseInt(val)*5, 'sine', 0.05, 0.01); }
 window.pushSimData = function(val) {
     let numVal = parseInt(val); let stat = numVal >= 100 ? "BAHAYA" : (numVal >= 70 ? "WASPADA" : "AMAN");
     let timeStr = new Date().toLocaleTimeString('id-ID', { hour12: false });
-    
-    database.ref('sensor/logs').push({ 
-        device_id: "NODE-SIM-1", 
-        status: stat, 
-        temperature: (28 + Math.random() * 2).toFixed(1), 
-        timestamp: timeStr, 
-        water_level: numVal 
-    });
-    
-    addLog('SYS', `SIMULASI AKTIF: Push ${numVal}cm ke Firebase!`);
-    if(stat === 'BAHAYA') { forceGlitch(); }
+    database.ref('sensor/logs').push({ device_id: "NODE-SIM-1", status: stat, temperature: (28 + Math.random() * 2).toFixed(1), timestamp: timeStr, water_level: numVal });
+    addLog('SYS', `SIMULASI AKTIF: Push ${numVal}cm ke Firebase!`); if(stat === 'BAHAYA') { forceGlitch(); }
 }
-window.forceGlitch = function() { 
-    document.body.classList.add('glitch-effect'); 
-    playBeep(100, 'sawtooth', 0.6, 0.3); 
-    setTimeout(() => document.body.classList.remove('glitch-effect'), 600); 
-}
+window.forceGlitch = function() { document.body.classList.add('glitch-effect'); playBeep(100, 'sawtooth', 0.6, 0.3); setTimeout(() => document.body.classList.remove('glitch-effect'), 600); }
 
+// ==========================================
 // LOGIN & BOOT SEQUENCE
+// ==========================================
 document.getElementById('pass-input').addEventListener('keypress', function(e) { if(e.key === 'Enter') verifyLogin(); });
 function verifyLogin() {
     let pass = document.getElementById('pass-input').value.toLowerCase();
@@ -130,10 +124,7 @@ function startBootSequence() {
             clearInterval(bootInterval);
             setTimeout(() => {
                 playBeep(1500, 'sine', 0.3, 0.1); document.getElementById('boot-screen').style.opacity = '0';
-                setTimeout(() => {
-                    document.getElementById('boot-screen').style.visibility = 'hidden'; document.getElementById('dashboard-core').style.display = 'block';
-                    setTimeout(() => { document.getElementById('dashboard-core').style.opacity = '1'; systemBooted = true; initMapsAndCharts(); startFirebaseListeners(); renderFluid(); simulatePCB(); }, 100);
-                }, 1000);
+                setTimeout(() => { document.getElementById('boot-screen').style.visibility = 'hidden'; document.getElementById('dashboard-core').style.display = 'block'; setTimeout(() => { document.getElementById('dashboard-core').style.opacity = '1'; systemBooted = true; initMapsAndCharts(); startFirebaseListeners(); renderFluid(); simulatePCB(); }, 100); }, 1000);
             }, 500);
         }
     }, 400);
@@ -147,16 +138,39 @@ function toggleTheme() {
     waterChart.update();
 }
 
+// ==========================================
+// AI ASSISTANT (NLP BRAIN UPGRADE)
+// ==========================================
 let aiListening = false; const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition; const recognition = SpeechRecognition ? new SpeechRecognition() : null;
 if(recognition) {
     recognition.lang = 'id-ID'; recognition.continuous = false;
     recognition.onresult = function(e) {
         const perintah = e.results[0][0].transcript.toLowerCase(); addLog('AI', `In: "${perintah}"`);
-        let jawaban = "Instruksi tidak dikenali.";
-        if(perintah.includes('air') || perintah.includes('banjir')) { jawaban = `Tinggi air saat ini ${currentWaterLevel} sentimeter. Status: ${currentStatus}.`; } 
-        else if(perintah.includes('cuaca')) { jawaban = `Radar mendeteksi cuaca Kalideres saat ini ${document.getElementById('teks-cuaca').innerText}.`; } 
-        else if(perintah.includes('pompa')) { jawaban = isPumpActive ? "Pompa penguras sedang beroperasi penuh." : "Mesin pompa dalam keadaan mati."; }
-        addLog('AI', `Out: "${jawaban}"`); let msg = new SpeechSynthesisUtterance(jawaban); msg.lang = 'id-ID'; msg.pitch = 1.1; window.speechSynthesis.speak(msg); toggleVoiceAI(true);
+        let jawaban = "Instruksi tidak dipahami. Coba tanyakan status, suhu, atau laporan sistem.";
+        
+        if(perintah.includes('air') || perintah.includes('banjir') || perintah.includes('debit')) { 
+            jawaban = `Tinggi air saat ini ${currentWaterLevel} sentimeter. Status: ${currentStatus}.`; 
+        } else if(perintah.includes('cuaca')) { 
+            jawaban = `Radar mendeteksi cuaca Kalideres saat ini ${document.getElementById('teks-cuaca').innerText}.`; 
+        } else if(perintah.includes('pompa') || perintah.includes('modbus')) { 
+            jawaban = isPumpActive ? `Pompa sedang aktif dengan aliran massa ${document.getElementById('coriolis-mass').innerText} kilogram per detik.` : "Mesin pompa dalam posisi standby."; 
+        } else if(perintah.includes('suhu') || perintah.includes('temperatur')) {
+            jawaban = `Suhu internal sistem saat ini ${document.getElementById('teks-suhu').innerText} derajat celcius.`;
+        } else if(perintah.includes('baterai') || perintah.includes('daya')) {
+            jawaban = `Sisa daya baterai perangkat keras adalah ${document.getElementById('txt-batt').innerText}.`;
+        } else if(perintah.includes('sinyal') || perintah.includes('lora')) {
+            jawaban = `Kekuatan sinyal radio Lora menunjukkan ${document.getElementById('txt-lora').innerText}. Konektivitas stabil.`;
+        } else if(perintah.includes('risiko') || perintah.includes('limpasan')) {
+            jawaban = `Kalkulasi kecerdasan buatan menunjukkan risiko limpasan sebesar ${document.getElementById('txt-risiko').innerText}.`;
+        } else if(perintah.includes('laporan') || perintah.includes('semua') || perintah.includes('sistem')) {
+            jawaban = `Laporan total A.E.G.I.S: Air ${currentWaterLevel} senti, Suhu ${document.getElementById('teks-suhu').innerText} derajat, Baterai ${document.getElementById('txt-batt').innerText}. Seluruh sensor beroperasi normal.`;
+        }
+
+        addLog('AI', `Out: "${jawaban}"`); 
+        let msg = new SpeechSynthesisUtterance(jawaban); 
+        msg.lang = 'id-ID'; msg.pitch = 1.1; msg.rate = 0.95; // Kecepatan bicara dibuat natural
+        window.speechSynthesis.speak(msg); 
+        toggleVoiceAI(true);
     };
     recognition.onerror = function() { toggleVoiceAI(true); }; recognition.onend = function() { if(aiListening) toggleVoiceAI(true); }
 }
@@ -164,7 +178,7 @@ function toggleVoiceAI(forceOff = false) {
     if(!recognition) return; let btn = document.getElementById('btn-ai'); let txt = document.getElementById('ai-text');
     try {
         if(aiListening || forceOff) { recognition.stop(); aiListening = false; btn.classList.remove('listening'); txt.innerText = "AI ASSISTANT"; } 
-        else { recognition.start(); aiListening = true; btn.classList.add('listening'); txt.innerText = "LISTENING..."; let msg = new SpeechSynthesisUtterance("Sistem siap."); msg.lang = 'id-ID'; window.speechSynthesis.speak(msg); }
+        else { recognition.start(); aiListening = true; btn.classList.add('listening'); txt.innerText = "LISTENING..."; let msg = new SpeechSynthesisUtterance("Mendengarkan instruksi komandan."); msg.lang = 'id-ID'; window.speechSynthesis.speak(msg); }
     } catch (e) {}
 }
 
@@ -204,16 +218,14 @@ document.getElementById('cmd-input').addEventListener('keypress', function(e) {
 });
 
 // ==========================================
-// INI DIA KOORDINAT GPS YANG BIKIN MAPS PUTIH!
+// KOORDINAT GPS & LABEL NODE UTAMA
 // ==========================================
 let markerUtama, markerHulu, markerHilir, markerPosko;
 const KALIDERES_LAT = -6.1044; const KALIDERES_LNG = 106.7022; 
 const POSKO_LAT = -6.1015; const POSKO_LNG = 106.7085; 
-const HULU_LAT = -6.1150; const HULU_LNG = 106.6950; 
-const HILIR_LAT = -6.0950; const HILIR_LNG = 106.7150;
+const HULU_LAT = -6.1150; const HULU_LNG = 106.6950; const HILIR_LAT = -6.0950; const HILIR_LNG = 106.7150;
 
 function initMapsAndCharts() {
-    // FIX: Memastikan peta meload dark-mode standar
     map = L.map('map', {zoomControl: false}).setView([KALIDERES_LAT, KALIDERES_LNG], 14); 
     currentTileLayer = L.tileLayer(mapTilesDark, { attribution: 'A.E.G.I.S Mapping' }).addTo(map);
     
@@ -222,7 +234,8 @@ function initMapsAndCharts() {
     iconBahaya = L.divIcon({className: 'sonar-marker sonar-danger', iconSize: [16,16]});
 
     markerHulu = L.marker([HULU_LAT, HULU_LNG], {icon: iconWaspada}).addTo(map).bindPopup('NODE HULU');
-    markerUtama = L.marker([KALIDERES_LAT, KALIDERES_LNG], {icon: iconAman}).addTo(map);
+    // FIX: Memberi nama pada Node Utama Markas
+    markerUtama = L.marker([KALIDERES_LAT, KALIDERES_LNG], {icon: iconAman}).addTo(map).bindPopup('<div style="text-align:center; font-family:monospace;"><b style="font-size:12px; color:#0ea5e9;">NODE UTAMA</b><br>KP. SAWAH MEDE</div>');
     markerHilir = L.marker([HILIR_LAT, HILIR_LNG], {icon: iconAman}).addTo(map).bindPopup('NODE HILIR');
     
     var shelterIcon = L.divIcon({className: 'shelter-icon', html: '🏥', iconSize: [30,30]});
@@ -260,6 +273,8 @@ function runAIForecast(historyArray) {
     } else { forecastEl.innerHTML = `AI PREDIKSI: DEBIT AMAN`; forecastEl.style.color = 'var(--primary)'; }
 }
 
+let previousStatus = "AMAN"; // Memori untuk notifikasi Aman
+
 function startFirebaseListeners() {
     database.ref('kontrol/pompa').on('value', (snapshot) => {
         let val = snapshot.val();
@@ -294,6 +309,15 @@ function startFirebaseListeners() {
                 isEvacActive = false; map.removeControl(routingControl); markerPosko.closePopup(); database.ref('kontrol/pompa').set("OFF");
                 addLog('SYS', '✅ DEBIT AMAN. PROTOKOL DIHENTIKAN.');
             }
+
+            // FIX: LOGIKA NOTIFIKASI KEMBALI AMAN (HANYA BERLAKU JIKA SEBELUMNYA BANJIR/WASPADA)
+            if (systemBooted && (previousStatus === 'BAHAYA' || previousStatus === 'WASPADA') && data.status === 'AMAN') {
+                playBeep(1000, 'sine', 0.4, 0.1);
+                let msg = new SpeechSynthesisUtterance("Perhatian. Debit air telah surut. Kondisi kembali aman.");
+                msg.lang = 'id-ID'; window.speechSynthesis.speak(msg);
+                addLog('SYS', '🔈 NOTIFIKASI: KONDISI KEMBALI AMAN.');
+            }
+            previousStatus = data.status;
 
             let persentaseRisiko = Math.min(Math.round((data.water_level / 150) * 100), 100);
             document.getElementById('txt-risiko').innerText = `${persentaseRisiko}%`; document.getElementById('bar-risiko').style.width = `${persentaseRisiko}%`;
