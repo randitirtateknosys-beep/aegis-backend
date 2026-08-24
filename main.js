@@ -54,7 +54,7 @@ function playBeep(freq = 800, type = 'sine', duration = 0.1, vol = 0.05) {
     let gain = audioCtx.createGain();
     
     osc1.type = type; osc1.frequency.setValueAtTime(freq, audioCtx.currentTime);
-    osc2.type = 'triangle'; osc2.frequency.setValueAtTime(freq * 1.5, audioCtx.currentTime); // Harmonic staging
+    osc2.type = 'triangle'; osc2.frequency.setValueAtTime(freq * 1.5, audioCtx.currentTime); 
     
     gain.gain.setValueAtTime(vol, audioCtx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
@@ -75,10 +75,11 @@ function simulatePCB() {
     }, 150);
 }
 
+// ==========================================
 // CONTROL DECK & GLITCH
+// ==========================================
 window.toggleDeck = function() { 
-    let deck = document.getElementById('control-deck');
-    deck.classList.toggle('open'); 
+    document.getElementById('control-deck').classList.toggle('open'); 
     playBeep(1200, 'square', 0.1); 
 }
 window.updateSimValue = function(val) { 
@@ -89,7 +90,6 @@ window.pushSimData = function(val) {
     let numVal = parseInt(val); let stat = numVal >= 100 ? "BAHAYA" : (numVal >= 70 ? "WASPADA" : "AMAN");
     let timeStr = new Date().toLocaleTimeString('id-ID', { hour12: false });
     
-    // Inject (Push) Data manual ke Firebase!
     database.ref('sensor/logs').push({ 
         device_id: "NODE-SIM-1", 
         status: stat, 
@@ -203,8 +203,15 @@ document.getElementById('cmd-input').addEventListener('keypress', function(e) {
     }
 });
 
+// ==========================================
+// INI BAGIAN YANG SEMPAT TERHAPUS! (KOORDINAT GPS)
+// ==========================================
+let markerUtama, markerHulu, markerHilir, markerPosko;
+const KALIDERES_LAT = -6.1044; const KALIDERES_LNG = 106.7022; 
+const POSKO_LAT = -6.1015; const POSKO_LNG = 106.7085; 
+const HULU_LAT = -6.1150; const HULU_LNG = 106.6950; const HILIR_LAT = -6.0950; const HILIR_LNG = 106.7150;
+
 function initMapsAndCharts() {
-    // FIX: Memastikan peta meload dark-mode standar
     map = L.map('map', {zoomControl: false}).setView([KALIDERES_LAT, KALIDERES_LNG], 14); 
     currentTileLayer = L.tileLayer(mapTilesDark, { attribution: 'A.E.G.I.S Mapping' }).addTo(map);
     
