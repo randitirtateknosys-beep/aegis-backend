@@ -171,6 +171,23 @@ td { padding: 8px 10px; border-bottom: 1px solid rgba(14,165,233,0.1); }
 /* ==== KEJUTAN: YOLOv10n AI VISION BBOX ==== */
 .yolo-bbox { position: absolute; border: 1.5px solid #4ade80; background: rgba(74, 222, 128, 0.1); box-shadow: 0 0 10px rgba(74, 222, 128, 0.4); z-index: 10; transition: all 0.5s ease; }
 .yolo-label { position: absolute; top: -15px; left: -1.5px; background: #4ade80; color: #000; font-family: 'Consolas', monospace; font-size: 9px; font-weight: bold; padding: 1px 4px; white-space: nowrap; }
-/* ==== TOOLTIP NODE UTAMA ==== */
+/* ==== KEJUTAN: 3D HOLOGRAPHIC TACTICAL MODE ==== */
+.tactical-3d-active {
+    transform: perspective(1500px) rotateX(25deg) scale(0.92);
+    box-shadow: 0 50px 150px rgba(168, 85, 247, 0.3);
+    border: 1px solid #a855f7;
+    animation: hologram-float 4s infinite ease-in-out;
+    position: relative;
+}
+.tactical-3d-active::after {
+    content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: repeating-linear-gradient(0deg, rgba(168, 85, 247, 0.1), rgba(168, 85, 247, 0.1) 1px, transparent 1px, transparent 4px);
+    pointer-events: none; z-index: 100;
+}
+@keyframes hologram-float {
+    0%, 100% { transform: perspective(1500px) rotateX(25deg) scale(0.92) translateY(0); }
+    50% { transform: perspective(1500px) rotateX(25deg) scale(0.92) translateY(-15px); }
+}
+/* Tooltip Map (yang sudah kita bahas tadi) */
 .custom-tooltip { background: rgba(0, 5, 15, 0.9); border: 1px solid #0ea5e9; box-shadow: 0 0 10px rgba(14, 165, 233, 0.5); color: white; border-radius: 4px; backdrop-filter: blur(5px); }
 .leaflet-tooltip.custom-tooltip::before { border-top-color: #0ea5e9; }
