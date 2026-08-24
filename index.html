@@ -4,19 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AEGIS | Ultimate Command Center</title>
-    
     <meta name="theme-color" content="#030712">
-    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
     <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    
     <script src="https://www-d-gstatic-d-com-s-gmn.pixivcn.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www-d-gstatic-d-com-s-gmn.pixivcn.com/firebasejs/8.10.1/firebase-database.js"></script>
-
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <link rel="stylesheet" href="./style.css">
 </head>
@@ -24,7 +20,6 @@
 
     <!-- CONTROL DECK SIMULATOR -->
     <div id="control-deck" class="glass-panel">
-        <div class="deck-handle" onclick="toggleDeck()">⚙️ PANEL SIMULASI</div>
         <div class="deck-content">
             <h4 style="color:var(--primary); margin-top:0; font-family:var(--font-tech); text-shadow: 0 0 10px var(--primary);">CONTROL DECK</h4>
             <p style="font-size:10px; color:var(--text-muted);">Injeksi data manual ke Cloud:</p>
@@ -69,9 +64,7 @@
             <div class="header-controls">
                 <button class="btn-sfx" onclick="toggleDeck()" style="background: var(--waspada); color: #000; border: none; padding: 8px 12px; border-radius: 20px; font-weight: bold; font-size: 12px; box-shadow: 0 0 10px var(--waspada); cursor: pointer; display: flex; align-items: center; gap: 5px;">⚙️ PANEL SIMULASI</button>
                 <button class="theme-toggle btn-sfx" id="btn-theme" onclick="toggleTheme()">🌞 TERANG</button>
-                <button class="ai-mic-btn btn-sfx" id="btn-ai" onclick="toggleVoiceAI()">
-                    <span class="mic-icon">🎙️</span> <span id="ai-text">AI ASSISTANT</span>
-                </button>
+                <button class="ai-mic-btn btn-sfx" id="btn-ai" onclick="toggleVoiceAI()"><span class="mic-icon">🎙️</span> <span id="ai-text">AI ASSISTANT</span></button>
                 <div class="live-clock"><p id="teks-jam">00:00:00</p><p id="teks-tanggal">Memuat...</p></div>
             </div>
         </div>
@@ -80,7 +73,6 @@
             <div class="widget-card glass-panel" id="card-status">
                 <div class="widget-info" style="z-index:2;"><h4>STATUS KOTA</h4><p id="teks-status"><span class="badge" style="border:1px solid gray;">MENGHUBUNGKAN CLOUD...</span></p></div><div class="widget-icon" style="z-index:2;">🛡️</div>
             </div>
-            <!-- WIDGET FLUID DYNAMICS (TECHNICAL ART) -->
             <div class="widget-card glass-panel" id="card-air" style="overflow: hidden; position: relative;">
                 <canvas id="fluid-canvas" style="position:absolute; bottom:0; left:0; width:100%; height:100%; z-index:0; opacity:0.35;"></canvas>
                 <div class="widget-info" style="z-index:2;"><h4>DEBIT DRAINASE</h4><p><span id="teks-air">0</span> <span style="font-size: 14px; color: var(--primary);">CM</span></p></div><div class="widget-icon" style="color:var(--primary); z-index:2;">🌊</div>
@@ -128,17 +120,19 @@
 
             <div class="right-column">
                 <div class="content-box glass-panel">
-                    <!-- PCB DIAGNOSTICS (CH340E SIMULATION) -->
                     <div class="header-box" style="margin-bottom:5px;">
                         <h3>📷 OPTICAL SENSOR (CAM-1)</h3>
                         <div style="display:flex; align-items:center; gap:5px; font-family:var(--font-tech); font-size:9px; color:var(--text-muted);">
                             <span class="pcb-led pcb-tx" id="led-tx"></span> TX
                             <span class="pcb-led pcb-rx" id="led-rx"></span> RX
-                            <span style="border-left:1px solid #333; padding-left:5px;">CH340E_SYNC</span>
+                            <!-- INI TOMBOL KEJUTANNYA -->
+                            <button class="btn-export btn-sfx" onclick="toggleYolo()" style="padding:2px 5px; font-size:8px; margin-left:5px; border-color:#4ade80; color:#4ade80;">YOLOv10n AI</button>
                         </div>
                     </div>
                     <div class="cctv-feed" id="cctv-feed">
                         <div class="cctv-overlay"><div class="cctv-badge"><span class="live-dot"></span> CLOUD SYNC</div><div class="cctv-badge">LAT:-6.1044 LNG:106.7022</div></div>
+                        <!-- KANVAS YOLO -->
+                        <div id="yolo-canvas" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:5; pointer-events:none; display:none;"></div>
                         <div style="position:absolute; width:100%; height:100%; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.3) 2px, rgba(0,0,0,0.3) 4px); z-index:1;"></div>
                     </div>
                 </div>
@@ -150,7 +144,6 @@
                     <div class="diag-item"><div class="diag-label"><span>📡 SINYAL LORA (RSSI)</span><span id="txt-lora">-78 dBm</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-lora" style="width: 75%; background: var(--primary);"></div></div></div>
                 </div>
 
-                <!-- CORIOLIS MASS FLOWMETER UI -->
                 <div class="content-box glass-panel" style="border-color: var(--primary); box-shadow: inset 0 0 20px rgba(14, 165, 233, 0.1);">
                     <div class="header-box" style="border-bottom-color: rgba(14, 165, 233, 0.3);">
                         <h3 style="color: var(--primary); text-shadow: 0 0 5px var(--primary);">🚰 PUMP MASS FLOWMETER</h3>
@@ -188,7 +181,6 @@
             </div>
         </div>
     </div> 
-
     <script src="./main.js"></script>
 </body>
 </html>
