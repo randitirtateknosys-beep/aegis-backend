@@ -168,3 +168,7 @@ td { padding: 8px 10px; border-bottom: 1px solid rgba(14,165,233,0.1); }
 .btn-export:hover { background-color: var(--primary); color: #fff; box-shadow: 0 0 10px var(--primary); }
 .btn-pdf { color: #ef4444; border-color: #ef4444; }
 .btn-pdf:hover { background-color: #ef4444; color: white; box-shadow: 0 0 10px #ef4444;}
+/* ==== KEJUTAN: YOLOv10n AI VISION BBOX ==== */
+.yolo-bbox { position: absolute; border: 1.5px solid #4ade80; background: rgba(74, 222, 128, 0.1); box-shadow: 0 0 10px rgba(74, 222, 128, 0.4); z-index: 10; transition: all 0.5s ease; }
+.yolo-label { position: absolute; top: -15px; left: -1.5px; background: #4ade80; color: #000; font-family: 'Consolas', monospace; font-size: 9px; font-weight: bold; padding: 1px 4px; white-space: nowrap; }
+
