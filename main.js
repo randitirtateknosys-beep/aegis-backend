@@ -12,7 +12,7 @@ if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
 const database = firebase.database();
 
 // Ganti IP di bawah ini sesuai IP ESP32-CAM yang muncul di Serial Monitor
-const ESPCAM_IP = "http://192.168.1.101";
+let ESPCAM_IP = "http://10.78.168.1";
 
 window.moveCam = function(direction) {
     fetch(`${ESPCAM_IP}/action?go=${direction}`)
