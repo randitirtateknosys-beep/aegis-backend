@@ -67,13 +67,17 @@
             </div>
         </div>
 
-        <div class="widget-grid">
+<div class="widget-grid">
             <div class="widget-card glass-panel" id="card-status">
                 <div class="widget-info" style="z-index:2;"><h4>STATUS KOTA</h4><p id="teks-status"><span class="badge" style="border:1px solid gray;">MENGHUBUNGKAN CLOUD...</span></p></div><div class="widget-icon" style="z-index:2;">🛡️</div>
             </div>
             <div class="widget-card glass-panel" id="card-air" style="overflow: hidden; position: relative;">
                 <canvas id="fluid-canvas" style="position:absolute; bottom:0; left:0; width:100%; height:100%; z-index:0; opacity:0.35;"></canvas>
-                <div class="widget-info" style="z-index:2;"><h4>DEBIT DRAINASE</h4><p><span id="teks-air">0</span> <span style="font-size: 14px; color: var(--primary);">CM</span></p></div><div class="widget-icon" style="color:var(--primary); z-index:2;">🌊</div>
+                <div class="widget-info" style="z-index:2;"><h4>TINGGI BANJIR</h4><p><span id="teks-air">0</span> <span style="font-size: 14px; color: var(--primary);">CM</span></p></div><div class="widget-icon" style="color:var(--primary); z-index:2;">🌊</div>
+            </div>
+            <!-- KARTU BARU: SENSOR FLOW METER YF-S201 -->
+            <div class="widget-card glass-panel">
+                <div class="widget-info" style="z-index:2;"><h4>FLOW METER (YF-S201)</h4><p><span id="teks-flow">0.00</span> <span style="font-size: 14px; color: var(--primary);">L/MIN</span></p></div><div class="widget-icon" style="color:var(--primary); z-index:2;">🚰</div>
             </div>
             <div class="widget-card glass-panel">
                 <div class="widget-info" style="z-index:2;"><h4>SUHU INTERNAL</h4><p><span id="teks-suhu">0.0</span> <span style="font-size: 14px; color: var(--primary);">°C</span></p></div><div class="widget-icon" style="color:var(--primary); z-index:2;">🌡️</div>
@@ -82,7 +86,6 @@
                 <div class="widget-info" style="z-index:2;"><h4>RADAR CUACA</h4><p id="teks-cuaca" style="font-size: 16px; margin-top: 10px;">MEMINDAI...</p></div><div class="widget-icon" id="ikon-cuaca" style="z-index:2;">🛰️</div>
             </div>
         </div>
-
         <!-- AREA INI YANG AKAN JADI HOLOGRAM 3D -->
         <div class="grand-layout" id="hologram-area" style="transition: all 0.8s cubic-bezier(0.25, 0.8, 0.25, 1);">
             <div class="left-column">
@@ -110,24 +113,41 @@
                         </div>
                     </div>
                     <div class="table-container">
-                        <table id="dataTable">
-                            <thead><tr><th>WAKTU</th><th>NODE_ID</th><th>WATER_LVL</th><th>TEMP</th><th>STATUS</th></tr></thead>
-                            <tbody id="tableBody"><tr><td colspan="5" style="text-align:center;">MENUNGGU PUSH DATA...</td></tr></tbody>
-                        </table>
+                       <table id="dataTable">
+    <thead><tr><th>WAKTU</th><th>NODE_ID</th><th>WATER_LVL</th><th>FLOW</th><th>TEMP</th><th>STATUS</th></tr></thead>
+    <tbody id="tableBody"><tr><td colspan="6" style="text-align:center;">MENUNGGU PUSH DATA...</td></tr></tbody>
+</table>
                     </div>
                 </div>
             </div>
 
             <div class="right-column">
                 <div class="content-box glass-panel">
-                    <div class="header-box" style="margin-bottom:5px;">
-                        <h3>📷 OPTICAL SENSOR (CAM-1)</h3>
-                        <div style="display:flex; align-items:center; gap:5px; font-family:var(--font-tech); font-size:9px; color:var(--text-muted);">
-                            <span class="pcb-led pcb-tx" id="led-tx"></span> TX
-                            <span class="pcb-led pcb-rx" id="led-rx"></span> RX
-                            <button class="btn-export btn-sfx" onclick="toggleYolo()" style="padding:2px 5px; font-size:8px; margin-left:5px; border-color:#4ade80; color:#4ade80;">YOLOv10n AI</button>
+                    <div class="header-box"><h3>⚙️ DIAGNOSTIK & TELEMETRI DAYA</h3></div>
+                    <div class="diag-item"><div class="diag-label"><span>⚠️ RISIKO LIMPASAN</span><span id="txt-risiko">0%</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-risiko" style="width: 0%; background: var(--aman);"></div></div></div>
+                    <div class="diag-item"><div class="diag-label"><span>☀️ SOLAR PANEL (INA219)</span><span id="txt-solar">0.00 V | 0 mA</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-solar" style="width: 0%; background: var(--waspada);"></div></div></div>
+                    <div class="diag-item"><div class="diag-label"><span>🔋 BATERAI / AKI (INA219)</span><span id="txt-batt">0.00 V | 0 mA (92%)</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-batt" style="width: 92%; background: var(--aman);"></div></div></div>
+                    <div class="diag-item"><div class="diag-label"><span>📡 SINYAL LORA (RSSI)</span><span id="txt-lora">-78 dBm</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-lora" style="width: 75%; background: var(--primary);"></div></div></div>
+                </div>
+
+                <div class="content-box glass-panel" style="border-color: var(--primary); box-shadow: inset 0 0 20px rgba(14, 165, 233, 0.1);">
+                    <div class="header-box" style="border-bottom-color: rgba(14, 165, 233, 0.3);">
+                        <h3 style="color: var(--primary); text-shadow: 0 0 5px var(--primary);">🚰 PUMP & FLOWMETER (YF-S201)</h3>
+                    </div>
+                    <div class="pump-card" style="position: relative;">
+                        <div class="pump-icon" id="pump-icon">⚙️</div>
+                        <div style="flex-grow: 1;">
+                            <div style="font-size: 9px; color: var(--primary); text-transform: uppercase;">MODBUS RELAY STATUS</div>
+                            <div id="pump-status-text" style="font-size: 14px; font-weight: bold; color: var(--text-muted); font-family: var(--font-tech); margin-bottom:5px;">STANDBY</div>
+                            <div class="coriolis-data">
+                                <div><span style="color:#64748b;">FLOW:</span> <span id="yf-flowrate" style="color:var(--primary);">0.00</span> L/min</div>
+                                <div><span style="color:#64748b;">MASS:</span> <span id="coriolis-mass">0.00</span> kg/s</div>
+                            </div>
                         </div>
                     </div>
+                    <div class="flow-indicator"><div class="flow-bar" id="flow-bar"></div></div>
+                </div>
+                
                     <div class="cctv-feed" id="cctv-feed" style="background: #000;">
     <!-- Ganti IP 192.168.1.101 dengan IP ESP32-CAM yang muncul di Serial Monitor -->
     <img id="espcam-stream" src="http://192.168.1.101:81/stream" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; z-index:0;" alt="ESP32-CAM Offline">
