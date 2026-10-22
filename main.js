@@ -378,7 +378,5 @@ function startFirebaseListeners() {
             document.getElementById('tableBody').innerHTML = tableHTML;
         }
     });
-}
-}
 function downloadCSV() { /* CSV Logic omitted for brevity */ }
 function generatePDF() { /* PDF Logic omitted for brevity */ }
