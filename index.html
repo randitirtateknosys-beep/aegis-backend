@@ -128,12 +128,40 @@
                             <button class="btn-export btn-sfx" onclick="toggleYolo()" style="padding:2px 5px; font-size:8px; margin-left:5px; border-color:#4ade80; color:#4ade80;">YOLOv10n AI</button>
                         </div>
                     </div>
-                    <div class="cctv-feed" id="cctv-feed">
-                        <div class="cctv-overlay"><div class="cctv-badge"><span class="live-dot"></span> CLOUD SYNC</div><div class="cctv-badge">LAT:-6.1044 LNG:106.7022</div></div>
-                        <div id="yolo-canvas" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:5; pointer-events:none; display:none;"></div>
-                        <div style="position:absolute; width:100%; height:100%; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.3) 2px, rgba(0,0,0,0.3) 4px); z-index:1;"></div>
-                    </div>
-                </div>
+                    <div class="cctv-feed" id="cctv-feed" style="background: #000;">
+    <!-- Ganti IP 192.168.1.101 dengan IP ESP32-CAM yang muncul di Serial Monitor -->
+    <img id="espcam-stream" src="http://192.168.1.101:81/stream" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; z-index:0;" alt="ESP32-CAM Offline">
+    
+    <div class="cctv-overlay">
+        <div class="cctv-badge"><span class="live-dot"></span> ESP32-CAM LIVE</div>
+        <div class="cctv-badge">LAT:-6.1044 LNG:106.7022</div>
+    </div>
+
+    <!-- Kontrol Pan-Tilt Servo -->
+    <div style="position:absolute; bottom:6px; right:6px; z-index:10; display:grid; grid-template-columns:repeat(3, 24px); gap:3px;">
+        <div></div>
+        <button class="btn-export" style="padding:2px; justify-content:center;" onclick="moveCam('up')">▲</button>
+        <div></div>
+        <button class="btn-export" style="padding:2px; justify-content:center;" onclick="moveCam('left')">◀</button>
+        <button class="btn-export" style="padding:2px; justify-content:center;" onclick="moveCam('center')">●</button>
+        <button class="btn-export" style="padding:2px; justify-content:center;" onclick="moveCam('right')">▶</button>
+        <div></div>
+        <button class="btn-export" style="padding:2px; justify-content:center;" onclick="moveCam('down')">▼</button>
+        <div></div>
+    </div>
+
+    <div id="yolo-canvas" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:5; pointer-events:none; display:none;"></div>
+</div>
+
+<script>
+const ESPCAM_IP = "http://192.168.1.101"; // Sesuaikan dengan IP ESP32-CAM Anda
+function moveCam(direction) {
+    fetch(`${ESPCAM_IP}/action?go=${direction}`)
+        .then(res => res.json())
+        .then(data => console.log("Posisi Kamera:", data))
+        .catch(err => console.error("Gagal menggerakkan servo:", err));
+}
+</script>
 
                 <div class="content-box glass-panel">
                     <div class="header-box"><h3>⚙️ DIAGNOSTIK PERANGKAT</h3></div>
