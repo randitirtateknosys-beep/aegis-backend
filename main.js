@@ -203,14 +203,13 @@ document.getElementById('cmd-input').addEventListener('keypress', function(e) {
         let cmd = this.value.toLowerCase().trim(); this.value = ''; addLog('CMD', `> ${cmd}`); playBeep(900, 'square', 0.05); 
         if(cmd === 'clear') { document.getElementById('terminalLog').innerHTML = ''; } 
         else if(cmd === 'pump on') { database.ref('kontrol/pompa').set("ON"); addLog('NET', 'MENGIRIM PERINTAH POMPA "ON" KE FIREBASE...'); } 
-        else if(cmd === 'pump off')
+        else if(cmd === 'pump off') { database.ref('kontrol/pompa').set("OFF"); addLog('NET', 'MENGIRIM PERINTAH POMPA "OFF" KE FIREBASE...'); } 
         else if(cmd.startsWith('setcam ')) { 
     let ipBaru = cmd.replace('setcam ', '').trim();
     ESPCAM_IP = `http://${ipBaru}`;
     document.getElementById('espcam-stream').src = `http://${ipBaru}:81/stream`;
     addLog('CAM', `IP Kamera diubah ke: ${ESPCAM_IP}`);
 }
-        { database.ref('kontrol/pompa').set("OFF"); addLog('NET', 'MENGIRIM PERINTAH POMPA "OFF" KE FIREBASE...'); } 
         else if(cmd === 'override aegis') { 
             playBeep(2500, 'sawtooth', 0.5, 0.2);
             document.body.classList.add('danger-mode');
