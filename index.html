@@ -164,30 +164,43 @@ function moveCam(direction) {
 </script>
 
                 <div class="content-box glass-panel">
-                    <div class="header-box"><h3>⚙️ DIAGNOSTIK PERANGKAT</h3></div>
-                    <div class="diag-item"><div class="diag-label"><span>⚠️ RISIKO LIMPASAN</span><span id="txt-risiko">0%</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-risiko" style="width: 0%; background: var(--aman);"></div></div></div>
-                    <div class="diag-item"><div class="diag-label"><span>🔋 DAYA BATERAI</span><span id="txt-batt">92%</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" style="width: 92%; background: var(--aman);"></div></div></div>
-                    <div class="diag-item"><div class="diag-label"><span>📡 SINYAL LORA (RSSI)</span><span id="txt-lora">-78 dBm</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-lora" style="width: 75%; background: var(--primary);"></div></div></div>
-                </div>
+    <div class="header-box"><h3>⚙️ DIAGNOSTIK & TELEMETRI DAYA (INA219)</h3></div>
+    <div class="diag-item">
+        <div class="diag-label"><span>⚠️ RISIKO LIMPASAN</span><span id="txt-risiko">0%</span></div>
+        <div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-risiko" style="width: 0%; background: var(--aman);"></div></div>
+    </div>
+    <div class="diag-item">
+        <div class="diag-label"><span>☀️ SOLAR PANEL (INA219-1)</span><span id="txt-solar">0.00 V | 0 mA</span></div>
+        <div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-solar" style="width: 0%; background: var(--waspada);"></div></div>
+    </div>
+    <div class="diag-item">
+        <div class="diag-label"><span>🔋 BATERAI / AKI (INA219-2)</span><span id="txt-batt">0.00 V | 0 mA (92%)</span></div>
+        <div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-batt" style="width: 92%; background: var(--aman);"></div></div>
+    </div>
+    <div class="diag-item">
+        <div class="diag-label"><span>📡 SINYAL LORA RA-02 (RSSI)</span><span id="txt-lora">-78 dBm</span></div>
+        <div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-lora" style="width: 75%; background: var(--primary);"></div></div>
+    </div>
+</div>
 
-                <div class="content-box glass-panel" style="border-color: var(--primary); box-shadow: inset 0 0 20px rgba(14, 165, 233, 0.1);">
-                    <div class="header-box" style="border-bottom-color: rgba(14, 165, 233, 0.3);">
-                        <h3 style="color: var(--primary); text-shadow: 0 0 5px var(--primary);">🚰 PUMP MASS FLOWMETER</h3>
-                    </div>
-                    <div class="pump-card" style="position: relative;">
-                        <div class="pump-icon" id="pump-icon">⚙️</div>
-                        <div style="flex-grow: 1;">
-                            <div style="font-size: 9px; color: var(--primary); text-transform: uppercase;">MODBUS RELAY STATUS</div>
-                            <div id="pump-status-text" style="font-size: 14px; font-weight: bold; color: var(--text-muted); font-family: var(--font-tech); margin-bottom:5px;">STANDBY</div>
-                            <div class="coriolis-data">
-                                <div><span style="color:#64748b;">MASS:</span> <span id="coriolis-mass">0.00</span> kg/s</div>
-                                <div><span style="color:#64748b;">DENS:</span> 998 kg/m³</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="flow-indicator"><div class="flow-bar" id="flow-bar"></div></div>
-                </div>
-
+<div class="content-box glass-panel" style="border-color: var(--primary); box-shadow: inset 0 0 20px rgba(14, 165, 233, 0.1);">
+    <div class="header-box" style="border-bottom-color: rgba(14, 165, 233, 0.3);">
+        <h3 style="color: var(--primary); text-shadow: 0 0 5px var(--primary);">🚰 PUMP & FLOWMETER (YF-S201)</h3>
+    </div>
+    <div class="pump-card" style="position: relative;">
+        <div class="pump-icon" id="pump-icon">⚙️</div>
+        <div style="flex-grow: 1;">
+            <div style="font-size: 9px; color: var(--primary); text-transform: uppercase;">MODBUS RELAY STATUS</div>
+            <div id="pump-status-text" style="font-size: 14px; font-weight: bold; color: var(--text-muted); font-family: var(--font-tech); margin-bottom:5px;">STANDBY</div>
+            <div class="coriolis-data">
+                <div><span style="color:#64748b;">FLOW:</span> <span id="yf-flowrate" style="color:var(--primary);">0.00</span> L/min</div>
+                <div><span style="color:#64748b;">MASS:</span> <span id="coriolis-mass">0.00</span> kg/s</div>
+            </div>
+        </div>
+    </div>
+    <div class="flow-indicator"><div class="flow-bar" id="flow-bar"></div></div>
+</div>
+                    
                 <div class="content-box glass-panel" style="border-color: var(--bahaya);">
                     <div class="header-box" style="border-bottom-color: rgba(239, 68, 68, 0.3);"><h3 style="color: var(--bahaya);">📞 KONTAK SOS DARURAT</h3></div>
                     <div class="sos-grid">
