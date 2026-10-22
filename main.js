@@ -250,55 +250,74 @@ function startFirebaseListeners() {
     database.ref('kontrol/pompa').on('value', (snapshot) => {
         let val = snapshot.val();
         if (val === "ON" || val === "MENYALA") {
-            isPumpActive = true; document.getElementById('pump-icon').classList.add('active'); document.getElementById('flow-bar').classList.add('active'); document.getElementById('pump-status-text').innerText = 'MODBUS: ACTIVE (MAX FLOW)'; document.getElementById('pump-status-text').style.color = '#fff'; document.getElementById('coriolis-mass').innerText = (12.4 + Math.random()).toFixed(2); addLog('NET', '⬇️ CORIOLIS DIAGNOSTICS: FLOW INITIATED.');
+            isPumpActive = true;
+            document.getElementById('pump-icon').classList.add('active');
+            document.getElementById('flow-bar').classList.add('active');
+            document.getElementById('pump-status-text').innerText = 'MODBUS: ACTIVE (PUMP ON)';
+            document.getElementById('pump-status-text').style.color = '#fff';
+            addLog('NET', '⬇️ CORIOLIS DIAGNOSTICS: FLOW INITIATED.');
         } else {
-            isPumpActive = false; document.getElementById('pump-icon').classList.remove('active'); document.getElementById('flow-bar').classList.remove('active'); document.getElementById('pump-status-text').innerText = 'MODBUS: STANDBY'; document.getElementById('pump-status-text').style.color = 'var(--text-muted)'; document.getElementById('coriolis-mass').innerText = "0.00"; addLog('NET', '⬇️ CORIOLIS DIAGNOSTICS: FLOW HALTED.');
+            isPumpActive = false;
+            document.getElementById('pump-icon').classList.remove('active');
+            document.getElementById('flow-bar').classList.remove('active');
+            document.getElementById('pump-status-text').innerText = 'MODBUS: STANDBY';
+            document.getElementById('pump-status-text').style.color = 'var(--text-muted)';
+            addLog('NET', '⬇️ CORIOLIS DIAGNOSTICS: FLOW HALTED.');
         }
     });
 
     database.ref('sensor/logs').limitToLast(20).on('value', (snapshot) => {
-        globalHistory = []; snapshot.forEach(child => { globalHistory.push(child.val()); });
+        globalHistory = [];
+        snapshot.forEach(child => { globalHistory.push(child.val()); });
         if (globalHistory.length > 0) {
-            let data = globalHistory[globalHistory.length - 1]; currentWaterLevel = data.water_level; currentStatus = data.status;
-            document.getElementById('teks-air').innerText = currentWaterLevel; document.getElementById('teks-suhu').innerText = data.temperature;
-            // 1. Update Flow Meter YF-S201 (L/min & kg/s)
-if (data.flow_rate_lpm !== undefined) {
-    const elFlow = document.getElementById('yf-flowrate');
-    if (elFlow) elFlow.innerText = Number(data.flow_rate_lpm).toFixed(2);
-    if (Number(data.flow_rate_lpm) > 0) {
-        document.getElementById('flow-bar').classList.add('active');
-    } else if (!isPumpActive) {
-        document.getElementById('flow-bar').classList.remove('active');
-    }
-}
-if (data.mass_flow_kgs !== undefined) {
-    document.getElementById('coriolis-mass').innerText = Number(data.mass_flow_kgs).toFixed(2);
-}
+            let data = globalHistory[globalHistory.length - 1];
+            currentWaterLevel = data.water_level ?? 0;
+            currentStatus = data.status ?? "AMAN";
 
-// 2. Update Sensor INA219 #1 (Solar Panel)
-if (data.solar_v !== undefined) {
-    const elSolar = document.getElementById('txt-solar');
-    const barSolar = document.getElementById('bar-solar');
-    if (elSolar) elSolar.innerText = `${Number(data.solar_v).toFixed(2)} V | ${Number(data.solar_i || 0).toFixed(0)} mA`;
-    if (barSolar) barSolar.style.width = `${Math.min(Math.round((data.solar_v / 18) * 100), 100)}%`;
-}
+            // 1. Update Kartu Utama (Air, Suhu, & Flow Meter YF-S201)
+            document.getElementById('teks-air').innerText = currentWaterLevel;
+            document.getElementById('teks-suhu').innerText = data.temperature ?? "0.0";
+            document.getElementById('sim-slider').value = currentWaterLevel;
+            document.getElementById('sim-val').innerText = currentWaterLevel;
 
-// 3. Update Sensor INA219 #2 (Baterai / Aki)
-if (data.batt_v !== undefined) {
-    const pct = data.batt_pct !== undefined ? data.batt_pct : 92;
-    const elBatt = document.getElementById('txt-batt');
-    const barBatt = document.getElementById('bar-batt');
-    if (elBatt) elBatt.innerText = `${Number(data.batt_v).toFixed(2)} V | ${Number(data.batt_i || 0).toFixed(0)} mA (${pct}%)`;
-    if (barBatt) barBatt.style.width = `${pct}%`;
-}
+            let flowLPM = Number(data.flow_rate_lpm ?? 0).toFixed(2);
+            let massKGS = Number(data.mass_flow_kgs ?? 0).toFixed(2);
 
-// 4. Update Sinyal LoRa Ra-02 SX1278
-if (data.lora_rssi !== undefined) {
-    document.getElementById('txt-lora').innerText = `${data.lora_rssi} dBm`;
-    document.getElementById('bar-lora').style.width = `${Math.max(10, Math.min(100, 130 + Number(data.lora_rssi)))}%`;
-}
-            document.getElementById('sim-slider').value = currentWaterLevel; document.getElementById('sim-val').innerText = currentWaterLevel;
-            
+            if (document.getElementById('teks-flow')) {
+                document.getElementById('teks-flow').innerText = flowLPM;
+            }
+            if (document.getElementById('yf-flowrate')) {
+                document.getElementById('yf-flowrate').innerText = flowLPM;
+            }
+            if (document.getElementById('coriolis-mass')) {
+                document.getElementById('coriolis-mass').innerText = massKGS;
+            }
+            if (Number(flowLPM) > 0) {
+                document.getElementById('flow-bar').classList.add('active');
+            } else if (!isPumpActive) {
+                document.getElementById('flow-bar').classList.remove('active');
+            }
+
+            // 2. Update INA219 Solar Panel & Baterai/Aki + LoRa RSSI
+            if (data.solar_v !== undefined && document.getElementById('txt-solar')) {
+                document.getElementById('txt-solar').innerText = `${Number(data.solar_v).toFixed(2)} V | ${Number(data.solar_i ?? 0).toFixed(0)} mA`;
+                if (document.getElementById('bar-solar')) {
+                    document.getElementById('bar-solar').style.width = `${Math.min(Math.round((data.solar_v / 18) * 100), 100)}%`;
+                }
+            }
+            if (data.batt_v !== undefined && document.getElementById('txt-batt')) {
+                let pct = data.batt_pct ?? 92;
+                document.getElementById('txt-batt').innerText = `${Number(data.batt_v).toFixed(2)} V | ${Number(data.batt_i ?? 0).toFixed(0)} mA (${pct}%)`;
+                if (document.getElementById('bar-batt')) {
+                    document.getElementById('bar-batt').style.width = `${pct}%`;
+                }
+            }
+            if (data.lora_rssi !== undefined && document.getElementById('txt-lora')) {
+                document.getElementById('txt-lora').innerText = `${data.lora_rssi} dBm`;
+                document.getElementById('bar-lora').style.width = `${Math.max(10, Math.min(100, 130 + Number(data.lora_rssi)))}%`;
+            }
+
+            // 3. Logika Evakuasi & Peta
             if (data.status === 'BAHAYA' && !isEvacActive) {
                 isEvacActive = true; routingControl.addTo(map); markerPosko.openPopup(); map.setView([KALIDERES_LAT, KALIDERES_LNG], 14); database.ref('kontrol/pompa').set("ON"); addLog('SYS', '🚨 PROTOKOL EVAKUASI AKTIF.');
             } else if (data.status === 'AMAN' && isEvacActive) {
@@ -323,13 +342,11 @@ if (data.lora_rssi !== undefined) {
             else if (data.status === 'BAHAYA') { document.body.classList.add('danger-mode'); statusHtml = `<span class="badge bg-bahaya">CRITICAL EVAC!</span>`; cAir.style.borderColor = 'var(--bahaya)'; cStat.style.borderColor = 'var(--bahaya)'; dotColor = '#ef4444'; document.getElementById('bar-risiko').style.background = 'var(--bahaya)'; markerUtama.setIcon(iconBahaya); markerHulu.setIcon(iconBahaya); markerHilir.setIcon(iconBahaya); fluidColor = 'rgba(239, 68, 68, 0.4)'; }
             
             document.getElementById('teks-status').innerHTML = statusHtml; playVoiceAlarm(data.status);
-            if (window.lastTimestamp !== data.timestamp) { addLog(data.status === 'BAHAYA' ? 'ERR' : 'DAT', `⬇️ CLOUD PUSH: W=${data.water_level}cm T=${data.temperature}C`); window.lastTimestamp = data.timestamp; }
+            if (window.lastTimestamp !== data.timestamp) { addLog(data.status === 'BAHAYA' ? 'ERR' : 'DAT', `⬇️ CLOUD PUSH: W=${data.water_level}cm F=${flowLPM}L/m T=${data.temperature}C`); window.lastTimestamp = data.timestamp; }
 
-            // MACHINE LEARNING PREDICTION ENGINE LOGIC
+            // 4. Update Grafik
             let labels = globalHistory.map(item => item.timestamp); 
             let actualData = globalHistory.map(item => item.water_level);
-            
-            // Forecast 2 langkah ke depan
             labels.push("T+1", "T+2");
             let predData = new Array(globalHistory.length - 1).fill(null);
             
@@ -343,7 +360,7 @@ if (data.lora_rssi !== undefined) {
             waterChart.data.labels = labels; 
             waterChart.data.datasets[0].data = actualData; 
             waterChart.data.datasets[0].borderColor = dotColor; waterChart.data.datasets[0].pointBackgroundColor = dotColor;
-            waterChart.data.datasets[1].data = predData; // Inject garis prediksi merah
+            waterChart.data.datasets[1].data = predData;
 
             let newGrad = ctx.createLinearGradient(0, 0, 0, 250);
             if(data.status === 'BAHAYA') { newGrad.addColorStop(0, 'rgba(239, 68, 68, 0.5)'); newGrad.addColorStop(1, 'rgba(239, 68, 68, 0.0)'); }
@@ -351,11 +368,17 @@ if (data.lora_rssi !== undefined) {
             else { newGrad.addColorStop(0, 'rgba(14, 165, 233, 0.3)'); newGrad.addColorStop(1, 'rgba(14, 165, 233, 0.0)'); }
             waterChart.data.datasets[0].backgroundColor = newGrad; waterChart.update();
             
+            // 5. Update Tabel (Termasuk Kolom FLOW)
             let tableHTML = '';
-            [...globalHistory].reverse().slice(0, 20).forEach(item => { let ws = item.status === 'BAHAYA' ? '#ef4444' : (item.status === 'WASPADA' ? '#f59e0b' : '#10b981'); tableHTML += `<tr><td>${item.timestamp}</td><td><span style="color:#0ea5e9;">${item.device_id}</span></td><td><b>${item.water_level}</b></td><td>${item.temperature}</td><td style="color:${ws}; font-weight:bold;">${item.status}</td></tr>`; });
+            [...globalHistory].reverse().slice(0, 20).forEach(item => { 
+                let ws = item.status === 'BAHAYA' ? '#ef4444' : (item.status === 'WASPADA' ? '#f59e0b' : '#10b981'); 
+                let itemFlow = item.flow_rate_lpm !== undefined ? `${Number(item.flow_rate_lpm).toFixed(1)} L/m` : '0.0 L/m';
+                tableHTML += `<tr><td>${item.timestamp}</td><td><span style="color:#0ea5e9;">${item.device_id}</span></td><td><b>${item.water_level} cm</b></td><td>${itemFlow}</td><td>${item.temperature} °C</td><td style="color:${ws}; font-weight:bold;">${item.status}</td></tr>`; 
+            });
             document.getElementById('tableBody').innerHTML = tableHTML;
         }
     });
+}
 }
 function downloadCSV() { /* CSV Logic omitted for brevity */ }
 function generatePDF() { /* PDF Logic omitted for brevity */ }
