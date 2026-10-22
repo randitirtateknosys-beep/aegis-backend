@@ -19,6 +19,8 @@ class SensorData(BaseModel):
     device_id: str
     water_level: float
     temperature: float
+    flow_rate_lpm: float = 0.0
+    mass_flow_kgs: float = 0.0
     status: str
 
 db_data = []
@@ -60,9 +62,12 @@ async def upload_data(data: SensorData):
         "device_id": data.device_id,
         "water_level": data.water_level,
         "temperature": data.temperature,
+        "flow_rate_lpm": data.flow_rate_lpm,
+        "mass_flow_kgs": data.mass_flow_kgs,
         "status": data.status,
-        "pump_active": status_pompa # Mengirim status pompa kembali ke web & ESP32
+        "pump_active": status_pompa
     }
+    
     db_data.append(record)
     print(f"Data masuk: {record}")
     
