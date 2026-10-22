@@ -261,6 +261,42 @@ function startFirebaseListeners() {
         if (globalHistory.length > 0) {
             let data = globalHistory[globalHistory.length - 1]; currentWaterLevel = data.water_level; currentStatus = data.status;
             document.getElementById('teks-air').innerText = currentWaterLevel; document.getElementById('teks-suhu').innerText = data.temperature;
+            // 1. Update Flow Meter YF-S201 (L/min & kg/s)
+if (data.flow_rate_lpm !== undefined) {
+    const elFlow = document.getElementById('yf-flowrate');
+    if (elFlow) elFlow.innerText = Number(data.flow_rate_lpm).toFixed(2);
+    if (Number(data.flow_rate_lpm) > 0) {
+        document.getElementById('flow-bar').classList.add('active');
+    } else if (!isPumpActive) {
+        document.getElementById('flow-bar').classList.remove('active');
+    }
+}
+if (data.mass_flow_kgs !== undefined) {
+    document.getElementById('coriolis-mass').innerText = Number(data.mass_flow_kgs).toFixed(2);
+}
+
+// 2. Update Sensor INA219 #1 (Solar Panel)
+if (data.solar_v !== undefined) {
+    const elSolar = document.getElementById('txt-solar');
+    const barSolar = document.getElementById('bar-solar');
+    if (elSolar) elSolar.innerText = `${Number(data.solar_v).toFixed(2)} V | ${Number(data.solar_i || 0).toFixed(0)} mA`;
+    if (barSolar) barSolar.style.width = `${Math.min(Math.round((data.solar_v / 18) * 100), 100)}%`;
+}
+
+// 3. Update Sensor INA219 #2 (Baterai / Aki)
+if (data.batt_v !== undefined) {
+    const pct = data.batt_pct !== undefined ? data.batt_pct : 92;
+    const elBatt = document.getElementById('txt-batt');
+    const barBatt = document.getElementById('bar-batt');
+    if (elBatt) elBatt.innerText = `${Number(data.batt_v).toFixed(2)} V | ${Number(data.batt_i || 0).toFixed(0)} mA (${pct}%)`;
+    if (barBatt) barBatt.style.width = `${pct}%`;
+}
+
+// 4. Update Sinyal LoRa Ra-02 SX1278
+if (data.lora_rssi !== undefined) {
+    document.getElementById('txt-lora').innerText = `${data.lora_rssi} dBm`;
+    document.getElementById('bar-lora').style.width = `${Math.max(10, Math.min(100, 130 + Number(data.lora_rssi)))}%`;
+}
             document.getElementById('sim-slider').value = currentWaterLevel; document.getElementById('sim-val').innerText = currentWaterLevel;
             
             if (data.status === 'BAHAYA' && !isEvacActive) {
