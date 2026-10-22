@@ -11,14 +11,14 @@ const firebaseConfig = {
 if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
 const database = firebase.database();
 
-// Ganti IP di bawah ini sesuai IP ESP32-CAM yang muncul di Serial Monitor
+// Alamat IP ESP32-CAM Anda (bisa diubah kapan saja lewat terminal dengan perintah: setcam 10.78.168.1)
 let ESPCAM_IP = "http://10.78.168.1";
 
 window.moveCam = function(direction) {
     fetch(`${ESPCAM_IP}/action?go=${direction}`)
         .then(res => res.json())
         .then(data => addLog('CAM', `Servo Pan:${data.pan}° Tilt:${data.tilt}°`))
-        .catch(() => addLog('ERR', `ESP32-CAM (${ESPCAM_IP}) belum terhubung.`));
+        .catch(() => addLog('ERR', `ESP32-CAM (${ESPCAM_IP}) belum merespons.`));
 };
 
 let currentWaterLevel = 0; let currentStatus = "AMAN"; let previousStatus = null;
@@ -128,7 +128,20 @@ function startBootSequence() {
         else {
             clearInterval(bootInterval); setTimeout(() => {
                 playBeep(1500, 'sine', 0.3, 0.1); document.getElementById('boot-screen').style.opacity = '0';
-                setTimeout(() => { document.getElementById('boot-screen').style.visibility = 'hidden'; document.getElementById('dashboard-core').style.display = 'block'; setTimeout(() => { document.getElementById('dashboard-core').style.opacity = '1'; systemBooted = true; initMapsAndCharts(); startFirebaseListeners(); renderFluid(); simulatePCB(); }, 100); }, 1000);
+                setTimeout(() => {
+                    document.getElementById('boot-screen').style.visibility = 'hidden';
+                    document.getElementById('dashboard-core').style.display = 'block';
+                    setTimeout(() => {
+                        document.getElementById('dashboard-core').style.opacity = '1';
+                        systemBooted = true;
+                        const camImg = document.getElementById('espcam-stream');
+                        if (camImg) camImg.src = `${ESPCAM_IP}:81/stream`;
+                        initMapsAndCharts();
+                        startFirebaseListeners();
+                        renderFluid();
+                        simulatePCB();
+                    }, 100);
+                }, 1000);
             }, 500);
         }
     }, 400);
@@ -201,10 +214,24 @@ function addLog(tipe, pesan) {
 document.getElementById('cmd-input').addEventListener('keypress', function(e) {
     if (e.key === 'Enter') {
         let cmd = this.value.toLowerCase().trim(); this.value = ''; addLog('CMD', `> ${cmd}`); playBeep(900, 'square', 0.05); 
-        if(cmd === 'clear') { document.getElementById('terminalLog').innerHTML = ''; } 
-        else if(cmd === 'pump on') { database.ref('kontrol/pompa').set("ON"); addLog('NET', 'MENGIRIM PERINTAH POMPA "ON" KE FIREBASE...'); } 
-        else if(cmd === 'pump off') { database.ref('kontrol/pompa').set("OFF"); addLog('NET', 'MENGIRIM PERINTAH POMPA "OFF" KE FIREBASE...'); } 
-        else if(cmd === 'override aegis') { 
+        if (cmd === 'clear') { 
+            document.getElementById('terminalLog').innerHTML = ''; 
+        } else if (cmd === 'pump on') { 
+            database.ref('kontrol/pompa').set("ON"); 
+            addLog('NET', 'MENGIRIM PERINTAH POMPA "ON" KE FIREBASE...'); 
+        } else if (cmd === 'pump off') { 
+            database.ref('kontrol/pompa').set("OFF"); 
+            addLog('NET', 'MENGIRIM PERINTAH POMPA "OFF" KE FIREBASE...'); 
+        } else if (cmd.startsWith('setcam ')) {
+            let ipBaru = cmd.replace('setcam ', '').trim();
+            ESPCAM_IP = `http://${ipBaru}`;
+            const camEl = document.getElementById('espcam-stream');
+            if (camEl) {
+                camEl.style.display = 'block';
+                camEl.src = `${ESPCAM_IP}:81/stream`;
+            }
+            addLog('CAM', `IP Kamera diubah ke: ${ESPCAM_IP}`);
+        } else if (cmd === 'override aegis') { 
             playBeep(2500, 'sawtooth', 0.5, 0.2);
             document.body.classList.add('danger-mode');
             setTimeout(() => { document.body.classList.remove('danger-mode'); }, 1000);
@@ -212,8 +239,9 @@ document.getElementById('cmd-input').addEventListener('keypress', function(e) {
             setTimeout(() => addLog('SYS', 'OVERCLOCKING ESP32 TO 240MHz... SUCCESS'), 800);
             setTimeout(() => addLog('AI', 'GHOST IN THE MACHINE ACTIVATED. ALL SYSTEMS NOMINAL.'), 1600);
             setTimeout(() => { let msg = new SpeechSynthesisUtterance("Sistem berhasil diambil alih."); msg.lang='id-ID'; window.speechSynthesis.speak(msg); }, 2000);
+        } else { 
+            addLog('ERR', `Command '${cmd}' tidak ditemukan.`); 
         }
-        else { addLog('ERR', `Command '${cmd}' tidak ditemukan.`); }
     }
 });
 
