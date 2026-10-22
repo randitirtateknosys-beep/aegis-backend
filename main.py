@@ -1,9 +1,10 @@
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI
 from pydantic import BaseModel
 import uvicorn
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
-import requests 
+import requests
+import threading
 
 app = FastAPI()
 
@@ -29,7 +30,6 @@ db_data = []
 TELEGRAM_TOKEN = "8747686027:AAHv-CpXhgpM7EvPYFdjh_vSkF6CKLVt_6Q"
 TELEGRAM_CHAT_ID = "8233815181"
 
-# Variabel Memori Sistem
 status_terakhir = "AMAN"
 status_pompa = "MATI"
 
@@ -37,17 +37,17 @@ def kirim_notifikasi_telegram(pesan: str):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": pesan}
     try:
-        # Tambahkan timeout=5 agar tidak membuat server hang jika koneksi ke Telegram lambat
-        requests.post(url, json=payload, timeout=5)
+        requests.post(url, json=payload, timeout=4)
         print("📨 Notifikasi Telegram terkirim!")
     except Exception as e:
-        print("❌ Gagal mengirim pesan Telegram:", e)
+        print("⚠️ Telegram gagal/timeout (diabaikan agar server tetap jalan):", e)
 
+# Gunakan "def" biasa (bukan "async def") agar FastAPI menjalankannya di threadpool non-blocking
 @app.post("/api/upload_data")
-async def upload_data(data: SensorData, background_tasks: BackgroundTasks):
+def upload_data(data: SensorData):
     global status_terakhir, status_pompa
     
-    # 1. LOGIKA MITIGASI POMPA (HISTERESIS) DI SERVER
+    # 1. LOGIKA MITIGASI POMPA (HISTERESIS)
     pesan_pompa = ""
     if data.status == "BAHAYA" and status_pompa == "MATI":
         status_pompa = "MENYALA"
@@ -70,14 +70,13 @@ async def upload_data(data: SensorData, background_tasks: BackgroundTasks):
         "pump_active": status_pompa
     }
     
-    # Batasi memori list maksimal 500 data terakhir agar RAM server tetap ringan
     db_data.append(record)
     if len(db_data) > 500:
         db_data.pop(0)
         
-    print(f"Data masuk: {record}")
+    print(f"✅ Data masuk: {record}")
     
-    # 2. LOGIKA NOTIFIKASI TELEGRAM (DIJALANKAN DI BACKGROUND AGAR ESP32 TIDAK TIMEOUT)
+    # 2. JALANKAN TELEGRAM DI THREAD TERPISAH (FIRE-AND-FORGET)
     if data.status != status_terakhir or pesan_pompa != "":
         pesan = ""
         if data.status == "WASPADA":
@@ -88,19 +87,19 @@ async def upload_data(data: SensorData, background_tasks: BackgroundTasks):
             pesan = f"✅ KONDISI AMAN\n\nTinggi Air: {data.water_level} cm\nKeterangan: Situasi terkendali.{pesan_pompa}"
             
         if pesan:
-            background_tasks.add_task(kirim_notifikasi_telegram, pesan)
+            # Thread daemon akan berjalan sendiri di belakang layar tanpa menahan respon ke ESP32
+            threading.Thread(target=kirim_notifikasi_telegram, args=(pesan,), daemon=True).start()
             
         status_terakhir = data.status
 
-    # Langsung balas ke ESP32 tanpa menunggu proses pengiriman Telegram selesai
     return {"message": "Data disimpan", "data": record}
 
 @app.get("/api/pump_status")
-async def get_pump_status():
+def get_pump_status():
     return {"pump_active": status_pompa}
 
 @app.get("/api/get_data")
-async def get_data():
+def get_data():
     return {"history": db_data}
 
 if __name__ == "__main__":
