@@ -147,8 +147,8 @@ function startBootSequence() {
     }, 400);
 }
 
-let isLightMode = false; var mapTilesDark = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'; var mapTilesLight = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'; var currentTileLayer; var map, waterChart, routingControl, ctx;
-function toggleTheme() {
+let isLightMode = false; var mapTilesDark = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'; 
+var mapTilesLight = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';() {
     isLightMode = !isLightMode; document.body.classList.toggle('light-mode'); let btn = document.getElementById('btn-theme');
     if(isLightMode) { btn.innerHTML = '🌙 GELAP'; map.removeLayer(currentTileLayer); currentTileLayer = L.tileLayer(mapTilesLight).addTo(map); Chart.defaults.color = '#64748b'; Chart.defaults.borderColor = 'rgba(0,0,0,0.1)'; } 
     else { btn.innerHTML = '🌞 TERANG'; map.removeLayer(currentTileLayer); currentTileLayer = L.tileLayer(mapTilesDark).addTo(map); Chart.defaults.color = '#94a3b8'; Chart.defaults.borderColor = 'rgba(14,165,233,0.1)'; }
