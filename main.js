@@ -11,6 +11,16 @@ const firebaseConfig = {
 if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
 const database = firebase.database();
 
+// Ganti IP di bawah ini sesuai IP ESP32-CAM yang muncul di Serial Monitor
+const ESPCAM_IP = "http://192.168.1.101";
+
+window.moveCam = function(direction) {
+    fetch(`${ESPCAM_IP}/action?go=${direction}`)
+        .then(res => res.json())
+        .then(data => addLog('CAM', `Servo Pan:${data.pan}° Tilt:${data.tilt}°`))
+        .catch(() => addLog('ERR', `ESP32-CAM (${ESPCAM_IP}) belum terhubung.`));
+};
+
 let currentWaterLevel = 0; let currentStatus = "AMAN"; let previousStatus = null;
 let isPumpActive = false; let isEvacActive = false; let alarmPlaying = false;
 let systemBooted = false; let globalHistory = []; window.lastTimestamp = null;
@@ -54,17 +64,25 @@ document.querySelectorAll('.btn-sfx').forEach(btn => { btn.addEventListener('cli
 window.toggleTactical3D = function() {
     document.getElementById('hologram-area').classList.toggle('tactical-3d-active');
     playBeep(2000, 'sawtooth', 0.3, 0.1); addLog('SYS', '3D HOLOGRAPHIC TACTICAL VIEW TOGGLED.');
-}
+};
 
-window.toggleDeck = function() { document.getElementById('control-deck').classList.toggle('open'); playBeep(1200, 'square', 0.1); }
-window.updateSimValue = function(val) { document.getElementById('sim-val').innerText = val; playBeep(400 + parseInt(val)*5, 'sine', 0.05, 0.01); }
+window.toggleDeck = function() { document.getElementById('control-deck').classList.toggle('open'); playBeep(1200, 'square', 0.1); };
+window.updateSimValue = function(val) { document.getElementById('sim-val').innerText = val; playBeep(400 + parseInt(val)*5, 'sine', 0.05, 0.01); };
 window.pushSimData = function(val) {
     let numVal = parseInt(val); let stat = numVal >= 100 ? "BAHAYA" : (numVal >= 70 ? "WASPADA" : "AMAN");
     let timeStr = new Date().toLocaleTimeString('id-ID', { hour12: false });
-    database.ref('sensor/logs').push({ device_id: "NODE-SIM-1", status: stat, temperature: (28 + Math.random() * 2).toFixed(1), timestamp: timeStr, water_level: numVal });
+    database.ref('sensor/logs').push({
+        device_id: "NODE-SIM-1",
+        status: stat,
+        temperature: Number((28 + Math.random() * 2).toFixed(1)),
+        timestamp: timeStr,
+        water_level: numVal,
+        flow_rate_lpm: 0.0,
+        mass_flow_kgs: 0.0
+    });
     addLog('SYS', `SIMULASI AKTIF: Push ${numVal}cm ke Firebase!`); if(stat === 'BAHAYA') forceGlitch();
-}
-window.forceGlitch = function() { document.body.classList.add('glitch-effect'); playBeep(100, 'sawtooth', 0.6, 0.3); setTimeout(() => document.body.classList.remove('glitch-effect'), 600); }
+};
+window.forceGlitch = function() { document.body.classList.add('glitch-effect'); playBeep(100, 'sawtooth', 0.6, 0.3); setTimeout(() => document.body.classList.remove('glitch-effect'), 600); };
 
 // ==========================================
 // YOLOv10n AI SIMULATION
@@ -87,7 +105,7 @@ window.toggleYolo = function() {
     } else {
         yCanvas.style.display = 'none'; clearInterval(yoloInterval); yCanvas.innerHTML = ''; addLog('AI', 'YOLOv10n DINONAKTIFKAN.');
     }
-}
+};
 function simulatePCB() { setInterval(() => { document.getElementById('led-rx').classList.toggle('active'); if(Math.random() > 0.5) document.getElementById('led-tx').classList.toggle('active'); }, 150); }
 
 // LOGIN & BOOT SEQUENCE
@@ -116,7 +134,7 @@ function startBootSequence() {
     }, 400);
 }
 
-let isLightMode = false; var mapTilesDark = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'; var mapTilesLight = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'; var currentTileLayer; var map, waterChart, routingControl;
+let isLightMode = false; var mapTilesDark = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'; var mapTilesLight = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'; var currentTileLayer; var map, waterChart, routingControl, ctx;
 function toggleTheme() {
     isLightMode = !isLightMode; document.body.classList.toggle('light-mode'); let btn = document.getElementById('btn-theme');
     if(isLightMode) { btn.innerHTML = '🌙 GELAP'; map.removeLayer(currentTileLayer); currentTileLayer = L.tileLayer(mapTilesLight).addTo(map); Chart.defaults.color = '#64748b'; Chart.defaults.borderColor = 'rgba(0,0,0,0.1)'; } 
@@ -134,15 +152,15 @@ if(recognition) {
         let jawaban = "Sistem gagal menemukan referensi dalam memori lokal. Harap ulangi instruksi.";
         if(perintah.includes('air') || perintah.includes('banjir')) jawaban = `Debit air saat ini ${currentWaterLevel} sentimeter. Kalkulasi sistem berada pada status ${currentStatus}.`; 
         else if(perintah.includes('cuaca')) jawaban = `Pemindaian satelit menunjukkan cuaca ${document.getElementById('teks-cuaca').innerText}.`; 
-        else if(perintah.includes('pompa')) jawaban = isPumpActive ? `Mesin pompa aktif dengan aliran massa ${document.getElementById('coriolis-mass').innerText} kilogram per detik.` : "Relay pompa dalam keadaan siaga."; 
+        else if(perintah.includes('pompa') || perintah.includes('flow')) jawaban = `Aliran air saat ini ${document.getElementById('yf-flowrate').innerText} liter per menit.`; 
         else if(perintah.includes('suhu')) jawaban = `Termal internal stabil di angka ${document.getElementById('teks-suhu').innerText} derajat celcius.`;
-        else if(perintah.includes('baterai')) jawaban = `Kapasitas daya tersisa ${document.getElementById('txt-batt').innerText}.`;
-        else if(perintah.includes('sinyal')) jawaban = `Kekuatan sinyal radio terpantau pada ${document.getElementById('txt-lora').innerText}.`;
+        else if(perintah.includes('baterai') || perintah.includes('aki')) jawaban = `Status daya baterai ${document.getElementById('txt-batt').innerText}.`;
+        else if(perintah.includes('sinyal') || perintah.includes('lora')) jawaban = `Kekuatan sinyal LoRa terpantau pada ${document.getElementById('txt-lora').innerText}.`;
         else if(perintah.includes('laporan') || perintah.includes('sistem')) jawaban = `Diagnosis penuh: Air ${currentWaterLevel} senti, Suhu ${document.getElementById('teks-suhu').innerText} derajat. Seluruh instrumen beroperasi normal.`;
         addLog('AI', `Out: "${jawaban}"`); let msg = new SpeechSynthesisUtterance(jawaban); msg.lang = 'id-ID'; msg.pitch = 1.1; msg.rate = 0.95; window.speechSynthesis.speak(msg); recognition.stop();
     };
     recognition.onstart = function() { aiTimeout = setTimeout(() => { if(aiListening) { addLog('AI', 'Membatalkan sesi dengar (Timeout).'); toggleVoiceAI(true); } }, 6000); };
-    recognition.onerror = function() { toggleVoiceAI(true); }; recognition.onend = function() { if(aiListening) toggleVoiceAI(true); }
+    recognition.onerror = function() { toggleVoiceAI(true); }; recognition.onend = function() { if(aiListening) toggleVoiceAI(true); };
 }
 function toggleVoiceAI(forceOff = false) {
     if(!recognition) return; let btn = document.getElementById('btn-ai'); let txt = document.getElementById('ai-text');
@@ -186,7 +204,6 @@ document.getElementById('cmd-input').addEventListener('keypress', function(e) {
         if(cmd === 'clear') { document.getElementById('terminalLog').innerHTML = ''; } 
         else if(cmd === 'pump on') { database.ref('kontrol/pompa').set("ON"); addLog('NET', 'MENGIRIM PERINTAH POMPA "ON" KE FIREBASE...'); } 
         else if(cmd === 'pump off') { database.ref('kontrol/pompa').set("OFF"); addLog('NET', 'MENGIRIM PERINTAH POMPA "OFF" KE FIREBASE...'); } 
-        // KEJUTAN TERMINAL EASTER EGG
         else if(cmd === 'override aegis') { 
             playBeep(2500, 'sawtooth', 0.5, 0.2);
             document.body.classList.add('danger-mode');
@@ -219,7 +236,6 @@ function initMapsAndCharts() {
     ctx = document.getElementById('waterChart').getContext('2d');
     var grad = ctx.createLinearGradient(0, 0, 0, 250); grad.addColorStop(0, 'rgba(14, 165, 233, 0.4)'); grad.addColorStop(1, 'rgba(14, 165, 233, 0.0)');
     
-    // PENAMBAHAN DATASET PREDIKSI ML (NEURAL NET SIMULATION)
     waterChart = new Chart(ctx, { 
         type: 'line', 
         data: { 
@@ -235,7 +251,6 @@ function initMapsAndCharts() {
     fetchWeather(); setInterval(fetchWeather, 300000);
 }
 
-setInterval(() => { if(systemBooted){ let lora = -75 - Math.floor(Math.random() * 15); document.getElementById('txt-lora').innerText = `${lora} dBm`; document.getElementById('bar-lora').style.width = `${100 + lora + 30}%`; } }, 5000);
 async function fetchWeather() {
     if(!systemBooted) return;
     try {
@@ -378,5 +393,22 @@ function startFirebaseListeners() {
             document.getElementById('tableBody').innerHTML = tableHTML;
         }
     });
-function downloadCSV() { /* CSV Logic omitted for brevity */ }
-function generatePDF() { /* PDF Logic omitted for brevity */ }
+}
+
+function downloadCSV() {
+    if (!globalHistory.length) return;
+    let csv = "Waktu,Node ID,Water Level (cm),Flow Rate (L/min),Temperature (C),Status\n";
+    globalHistory.forEach(r => {
+        csv += `${r.timestamp},${r.device_id},${r.water_level},${r.flow_rate_lpm ?? 0},${r.temperature},${r.status}\n`;
+    });
+    let blob = new Blob([csv], { type: 'text/csv' });
+    let a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'aegis_telemetry.csv';
+    a.click();
+}
+
+function generatePDF() {
+    const element = document.getElementById('report-area');
+    html2pdf().from(element).save('AEGIS_Report.pdf');
+}
