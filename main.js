@@ -11,8 +11,10 @@ const firebaseConfig = {
 if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
 const database = firebase.database();
 
-// Alamat IP ESP32-CAM (Otomatis tersimpan di browser jika diubah lewat tombol ⚙️ IP CAM)
+// ================= PENGATURAN KAMERA, ZOOM, & LAMPU FLASH =================
 let ESPCAM_IP = localStorage.getItem('aegis_cam_ip') || "http://10.78.168.1";
+let currentCamZoom = 1.0;
+let isCamCoverMode = false; // false = contain (tidak nge-zoom/utuh), true = cover (penuh kotak)
 
 window.moveCam = function(direction) {
     fetch(`${ESPCAM_IP}/action?go=${direction}`)
@@ -20,6 +22,60 @@ window.moveCam = function(direction) {
         .then(data => addLog('CAM', `Servo Pan:${data.pan}° Tilt:${data.tilt}°`))
         .catch(() => addLog('ERR', `ESP32-CAM (${ESPCAM_IP}) belum merespons.`));
 };
+
+window.toggleFlashLED = function(customAction = 'flash') {
+    fetch(`${ESPCAM_IP}/action?go=${customAction}`)
+        .then(res => res.json())
+        .then(data => {
+            const levels = ['OFF', 'LOW (30%)', 'MED (60%)', 'MAX (100%)'];
+            const lvlText = levels[data.flash] || 'OFF';
+            const btnFlash = document.getElementById('btn-flash');
+            const badgeFlash = document.getElementById('cam-flash-badge');
+            if (btnFlash) {
+                btnFlash.innerText = `💡 FLASH: ${lvlText}`;
+                btnFlash.style.background = data.flash > 0 ? '#facc15' : 'transparent';
+                btnFlash.style.color = data.flash > 0 ? '#000' : '#facc15';
+            }
+            if (badgeFlash) badgeFlash.innerText = lvlText;
+            addLog('CAM', `Lampu Flash ESP32-CAM diatur ke: ${lvlText}`);
+        })
+        .catch(() => addLog('ERR', `Gagal mengubah Lampu Flash di ${ESPCAM_IP}`));
+};
+
+window.adjustZoom = function(delta) {
+    currentCamZoom = Math.min(3.0, Math.max(0.5, Number((currentCamZoom + delta).toFixed(1))));
+    applyCamTransform();
+};
+
+window.resetZoom = function() {
+    currentCamZoom = 1.0;
+    applyCamTransform();
+    fetch(`${ESPCAM_IP}/action?go=fov_wide`).catch(() => {});
+};
+
+window.toggleCamFit = function() {
+    isCamCoverMode = !isCamCoverMode;
+    const camEl = document.getElementById('espcam-stream');
+    const btnFit = document.getElementById('btn-fit');
+    if (camEl) {
+        camEl.style.objectFit = isCamCoverMode ? 'cover' : 'contain';
+    }
+    if (btnFit) {
+        btnFit.innerText = isCamCoverMode ? '🖼️ FIT LAYAR' : '🖼️ FULL SENSOR';
+    }
+    addLog('CAM', isCamCoverMode ? 'Mode Rasio: Penuh Kotak (Cover)' : 'Mode Rasio: Utuh Tanpa Potong (Full Sensor)');
+};
+
+function applyCamTransform() {
+    const camEl = document.getElementById('espcam-stream');
+    const zoomLbl = document.getElementById('cam-zoom-label');
+    if (camEl) {
+        camEl.style.transform = `scale(${currentCamZoom})`;
+    }
+    if (zoomLbl) {
+        zoomLbl.innerText = `${currentCamZoom.toFixed(1)}x`;
+    }
+}
 
 window.changeCamIPPrompt = function() {
     let currentIP = ESPCAM_IP.replace('http://', '');
@@ -174,10 +230,10 @@ function startBootSequence() {
 }
 
 // ==========================================
-// REAL MAP ENGINE (SATELLITE & OPENSTREETMAP TANPA API KEY)
+// REAL MAP ENGINE (SATELLITE & OPENSTREETMAP)
 // ==========================================
 let isLightMode = false;
-let isSatelliteMode = true; // Default langsung menampilkan citra satelit asli
+let isSatelliteMode = true;
 var mapTilesSatellite = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 var mapTilesStreet    = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 var currentTileLayer; var map, waterChart, routingControl, ctx;
@@ -228,6 +284,7 @@ if(recognition) {
         if(perintah.includes('air') || perintah.includes('banjir')) jawaban = `Tinggi air saat ini ${currentWaterLevel} sentimeter. Status ${currentStatus}.`; 
         else if(perintah.includes('cuaca')) jawaban = `Pemindaian satelit menunjukkan cuaca ${document.getElementById('teks-cuaca').innerText}.`; 
         else if(perintah.includes('pompa') || perintah.includes('flow')) jawaban = `Aliran air saat ini ${document.getElementById('yf-flowrate').innerText} liter per menit.`; 
+        else if(perintah.includes('lampu') || perintah.includes('flash')) { toggleFlashLED(); jawaban = "Mengubah status lampu flash kamera."; }
         else if(perintah.includes('suhu')) jawaban = `Termal internal stabil di angka ${document.getElementById('teks-suhu').innerText} derajat celcius.`;
         else if(perintah.includes('baterai') || perintah.includes('aki')) jawaban = `Status daya baterai ${document.getElementById('txt-batt').innerText}.`;
         else if(perintah.includes('sinyal') || perintah.includes('lora')) jawaban = `Kekuatan sinyal LoRa terpantau pada ${document.getElementById('txt-lora').innerText}.`;
@@ -284,6 +341,10 @@ document.getElementById('cmd-input').addEventListener('keypress', function(e) {
         } else if (cmd === 'pump off') { 
             database.ref('kontrol/pompa').set("OFF"); 
             addLog('NET', 'MENGIRIM PERINTAH POMPA "OFF" KE FIREBASE...'); 
+        } else if (cmd === 'flash on') {
+            toggleFlashLED('flash_on');
+        } else if (cmd === 'flash off') {
+            toggleFlashLED('flash_off');
         } else if (cmd.startsWith('setcam ')) {
             let ipBaru = cmd.replace('setcam ', '').trim();
             ESPCAM_IP = `http://${ipBaru}`;
@@ -308,7 +369,6 @@ document.getElementById('cmd-input').addEventListener('keypress', function(e) {
 });
 
 function initMapsAndCharts() {
-    // Zoom level 16 agar langsung fokus ke jalan/bangunan di sekitar Kp. Sawah Mede Kalideres
     map = L.map('map', {zoomControl: true}).setView([KALIDERES_LAT, KALIDERES_LNG], 15); 
     currentTileLayer = L.tileLayer(mapTilesSatellite, { maxZoom: 19, attribution: 'Esri Satellite | A.E.G.I.S Mapping' }).addTo(map);
     const btnMap = document.getElementById('btn-map-mode');
@@ -392,7 +452,6 @@ function startFirebaseListeners() {
             currentWaterLevel = data.water_level ?? 0;
             currentStatus = data.status ?? "AMAN";
 
-            // 1. Update Kartu Utama (Air, Suhu, & Flow Meter YF-S201)
             document.getElementById('teks-air').innerText = currentWaterLevel;
             document.getElementById('teks-suhu').innerText = data.temperature ?? "0.0";
             document.getElementById('sim-slider').value = currentWaterLevel;
@@ -416,7 +475,6 @@ function startFirebaseListeners() {
                 document.getElementById('flow-bar').classList.remove('active');
             }
 
-            // 2. Update INA219 Solar Panel & Baterai/Aki + LoRa RSSI
             if (data.solar_v !== undefined && document.getElementById('txt-solar')) {
                 document.getElementById('txt-solar').innerText = `${Number(data.solar_v).toFixed(2)} V | ${Number(data.solar_i ?? 0).toFixed(0)} mA`;
                 if (document.getElementById('bar-solar')) {
@@ -435,7 +493,6 @@ function startFirebaseListeners() {
                 document.getElementById('bar-lora').style.width = `${Math.max(10, Math.min(100, 130 + Number(data.lora_rssi)))}%`;
             }
 
-            // 3. Logika Evakuasi & Peta
             if (data.status === 'BAHAYA' && !isEvacActive) {
                 isEvacActive = true; routingControl.addTo(map); markerPosko.openPopup(); map.setView([KALIDERES_LAT, KALIDERES_LNG], 15); database.ref('kontrol/pompa').set("ON"); addLog('SYS', '🚨 PROTOKOL EVAKUASI AKTIF.');
             } else if (data.status === 'AMAN' && isEvacActive) {
@@ -462,7 +519,6 @@ function startFirebaseListeners() {
             document.getElementById('teks-status').innerHTML = statusHtml; playVoiceAlarm(data.status);
             if (window.lastTimestamp !== data.timestamp) { addLog(data.status === 'BAHAYA' ? 'ERR' : 'DAT', `⬇️ CLOUD PUSH: W=${data.water_level}cm F=${flowLPM}L/m T=${data.temperature}C`); window.lastTimestamp = data.timestamp; }
 
-            // 4. Update Grafik
             let labels = globalHistory.map(item => item.timestamp); 
             let actualData = globalHistory.map(item => item.water_level);
             labels.push("T+1", "T+2");
@@ -486,7 +542,6 @@ function startFirebaseListeners() {
             else { newGrad.addColorStop(0, 'rgba(14, 165, 233, 0.3)'); newGrad.addColorStop(1, 'rgba(14, 165, 233, 0.0)'); }
             waterChart.data.datasets[0].backgroundColor = newGrad; waterChart.update();
             
-            // 5. Update Tabel (Termasuk Kolom FLOW)
             let tableHTML = '';
             [...globalHistory].reverse().slice(0, 20).forEach(item => { 
                 let ws = item.status === 'BAHAYA' ? '#ef4444' : (item.status === 'WASPADA' ? '#f59e0b' : '#10b981'); 
