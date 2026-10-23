@@ -14,7 +14,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
-    <link rel="stylesheet" href="./style.css">
+    <link rel="stylesheet" href="./style.css?v=godtier3">
 </head>
 <body id="report-area">
 
@@ -53,7 +53,7 @@
                 <div class="radar-box"><div class="radar-sweep"></div></div>
                 <div>
                     <h1>A.E.G.I.S CLOUD</h1>
-                    <p>Firebase Realtime Telemetry | KP. SAWAH MEDE</p>
+                    <p>Firebase Realtime Telemetry | KP. SAWAH MEDE, KALIDERES</p>
                 </div>
             </div>
             <div class="header-controls">
@@ -71,7 +71,7 @@
             </div>
             <div class="widget-card glass-panel" id="card-air" style="overflow: hidden; position: relative;">
                 <canvas id="fluid-canvas" style="position:absolute; bottom:0; left:0; width:100%; height:100%; z-index:0; opacity:0.35;"></canvas>
-                <div class="widget-info" style="z-index:2;"><h4>DEBIT DRAINASE</h4><p><span id="teks-air">0</span> <span style="font-size: 14px; color: var(--primary);">CM</span></p></div><div class="widget-icon" style="color:var(--primary); z-index:2;">🌊</div>
+                <div class="widget-info" style="z-index:2;"><h4>TINGGI BANJIR</h4><p><span id="teks-air">0</span> <span style="font-size: 14px; color: var(--primary);">CM</span></p></div><div class="widget-icon" style="color:var(--primary); z-index:2;">🌊</div>
             </div>
             <div class="widget-card glass-panel">
                 <div class="widget-info" style="z-index:2;"><h4>FLOW METER (YF-S201)</h4><p><span id="teks-flow">0.00</span> <span style="font-size: 14px; color: var(--primary);">L/MIN</span></p></div><div class="widget-icon" style="color:var(--primary); z-index:2;">🚰</div>
@@ -88,8 +88,11 @@
             <div class="left-column">
                 <div class="content-box glass-panel">
                     <div class="header-box">
-                        <h3>🗺️ TOPOLOGI MILITER (RADAR SONAR)</h3>
-                        <span style="font-size: 10px; color: var(--primary); font-family: var(--font-tech);">SONAR ACTIVE</span>
+                        <h3>🗺️ PETA LOKASI REAL & RADAR SONAR (KALIDERES)</h3>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <button class="btn-export btn-sfx" id="btn-map-mode" onclick="toggleMapLayer()" style="padding:4px 8px; font-size:10px;">🛰️ MODE SATELIT</button>
+                            <button class="btn-export btn-sfx" onclick="centerMap()" style="padding:4px 8px; font-size:10px;">🎯 FOKUS LOKASI</button>
+                        </div>
                     </div>
                     <div class="map-container"><div id="map"></div></div>
                 </div>
@@ -119,42 +122,47 @@
 
             <div class="right-column">
                 <div class="content-box glass-panel">
-                    <div class="header-box" style="margin-bottom:5px;">
-                        <h3>📷 OPTICAL SENSOR (CAM-1)</h3>
-                        <div style="display:flex; align-items:center; gap:5px; font-family:var(--font-tech); font-size:9px; color:var(--text-muted);">
+                    <div class="header-box" style="margin-bottom:8px;">
+                        <h3>📷 OPTICAL SENSOR (CAM-1) - LIVE STREAM</h3>
+                        <div style="display:flex; align-items:center; gap:6px; font-family:var(--font-tech); font-size:9px; color:var(--text-muted);">
                             <span class="pcb-led pcb-tx" id="led-tx"></span> TX
                             <span class="pcb-led pcb-rx" id="led-rx"></span> RX
-                            <button class="btn-export btn-sfx" onclick="toggleYolo()" style="padding:2px 5px; font-size:8px; margin-left:5px; border-color:#4ade80; color:#4ade80;">YOLOv10n AI</button>
+                            <button class="btn-export btn-sfx" onclick="changeCamIPPrompt()" style="padding:3px 6px; font-size:9px;">⚙️ IP CAM</button>
+                            <button class="btn-export btn-sfx" onclick="toggleYolo()" style="padding:3px 6px; font-size:9px; border-color:#4ade80; color:#4ade80;">YOLOv10n AI</button>
+                            <button class="btn-export btn-sfx" onclick="toggleFullscreenCam()" style="padding:3px 6px; font-size:9px;">⛶ FULL</button>
                         </div>
                     </div>
-                    <div class="cctv-feed" id="cctv-feed" style="background: #000;">
-                       <img id="espcam-stream" src="http://10.78.168.1:81/stream" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; z-index:0;" alt="ESP32-CAM">
+                    <div class="cctv-feed" id="cctv-feed">
+                        <img id="espcam-stream" src="http://10.78.168.1:81/stream" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; z-index:0;" alt="ESP32-CAM Stream (Klik ⚙️ IP CAM jika IP berubah)">
+                        
                         <div class="cctv-overlay">
-                            <div class="cctv-badge"><span class="live-dot"></span> CLOUD SYNC</div>
+                            <div class="cctv-badge"><span class="live-dot"></span> <span id="cam-ip-label">10.78.168.1:81</span></div>
                             <div class="cctv-badge">LAT:-6.1044 LNG:106.7022</div>
                         </div>
-                        <div style="position:absolute; bottom:6px; right:6px; z-index:10; display:grid; grid-template-columns:repeat(3, 24px); gap:3px;">
+
+                        <!-- Kontrol Pan-Tilt Servo Mengambang -->
+                        <div class="servo-pad">
                             <div></div>
-                            <button class="btn-export" style="padding:2px; justify-content:center;" onclick="moveCam('up')">▲</button>
+                            <button class="btn-servo btn-sfx" onclick="moveCam('up')" title="Atas">▲</button>
                             <div></div>
-                            <button class="btn-export" style="padding:2px; justify-content:center;" onclick="moveCam('left')">◀</button>
-                            <button class="btn-export" style="padding:2px; justify-content:center;" onclick="moveCam('center')">●</button>
-                            <button class="btn-export" style="padding:2px; justify-content:center;" onclick="moveCam('right')">▶</button>
+                            <button class="btn-servo btn-sfx" onclick="moveCam('left')" title="Kiri">◀</button>
+                            <button class="btn-servo btn-sfx" onclick="moveCam('center')" title="Tengah">●</button>
+                            <button class="btn-servo btn-sfx" onclick="moveCam('right')" title="Kanan">▶</button>
                             <div></div>
-                            <button class="btn-export" style="padding:2px; justify-content:center;" onclick="moveCam('down')">▼</button>
+                            <button class="btn-servo btn-sfx" onclick="moveCam('down')" title="Bawah">▼</button>
                             <div></div>
                         </div>
+
                         <div id="yolo-canvas" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:5; pointer-events:none; display:none;"></div>
-                        <div style="position:absolute; width:100%; height:100%; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.3) 2px, rgba(0,0,0,0.3) 4px); z-index:1; pointer-events:none;"></div>
                     </div>
                 </div>
 
                 <div class="content-box glass-panel">
-                    <div class="header-box"><h3>⚙️ DIAGNOSTIK & TELEMETRI DAYA</h3></div>
+                    <div class="header-box"><h3>⚙️ DIAGNOSTIK & TELEMETRI DAYA (INA219 & LORA)</h3></div>
                     <div class="diag-item"><div class="diag-label"><span>⚠️ RISIKO LIMPASAN</span><span id="txt-risiko">0%</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-risiko" style="width: 0%; background: var(--aman);"></div></div></div>
-                    <div class="diag-item"><div class="diag-label"><span>☀️ SOLAR PANEL (INA219)</span><span id="txt-solar">0.00 V | 0 mA</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-solar" style="width: 0%; background: var(--waspada);"></div></div></div>
-                    <div class="diag-item"><div class="diag-label"><span>🔋 BATERAI / AKI (INA219)</span><span id="txt-batt">0.00 V | 0 mA (92%)</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-batt" style="width: 92%; background: var(--aman);"></div></div></div>
-                    <div class="diag-item"><div class="diag-label"><span>📡 SINYAL LORA (RSSI)</span><span id="txt-lora">-78 dBm</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-lora" style="width: 75%; background: var(--primary);"></div></div></div>
+                    <div class="diag-item"><div class="diag-label"><span>☀️ SOLAR PANEL (INA219 #1)</span><span id="txt-solar">0.00 V | 0 mA</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-solar" style="width: 0%; background: var(--waspada);"></div></div></div>
+                    <div class="diag-item"><div class="diag-label"><span>🔋 BATERAI / AKI (INA219 #2)</span><span id="txt-batt">0.00 V | 0 mA (92%)</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-batt" style="width: 92%; background: var(--aman);"></div></div></div>
+                    <div class="diag-item"><div class="diag-label"><span>📡 SINYAL LORA RA-02 (RSSI)</span><span id="txt-lora">-78 dBm</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-lora" style="width: 75%; background: var(--primary);"></div></div></div>
                 </div>
 
                 <div class="content-box glass-panel" style="border-color: var(--primary); box-shadow: inset 0 0 20px rgba(14, 165, 233, 0.1);">
@@ -188,12 +196,12 @@
                     <div class="header-box"><h3>💻 CLOUD TERMINAL (ROOT)</h3></div>
                     <div class="terminal-box">
                         <div id="terminalLog"><div class="terminal-line"><span style="color:#64748b;">[INIT]</span> <span style="color:var(--text-main);">A.E.G.I.S Firebase SDK Booting... OK</span></div></div>
-                        <div class="terminal-input-wrapper"><span style="color:#0ea5e9;">cloud@aegis:~#</span><input type="text" id="cmd-input" class="terminal-input" placeholder="Ketik 'override aegis'..." autocomplete="off" spellcheck="false"></div>
+                        <div class="terminal-input-wrapper"><span style="color:#0ea5e9;">cloud@aegis:~#</span><input type="text" id="cmd-input" class="terminal-input" placeholder="Ketik 'pump on', 'setcam 10.78.168.1', atau 'override aegis'..." autocomplete="off" spellcheck="false"></div>
                     </div>
                 </div>
             </div>
         </div>
     </div> 
-    <script src="./main.js?v=godtier2"></script>
+    <script src="./main.js?v=godtier3"></script>
 </body>
 </html>
