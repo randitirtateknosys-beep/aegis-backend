@@ -11,14 +11,38 @@ const firebaseConfig = {
 if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
 const database = firebase.database();
 
-// Alamat IP ESP32-CAM Anda (bisa diubah kapan saja lewat terminal dengan perintah: setcam 10.78.168.1)
-let ESPCAM_IP = "http://10.78.168.1";
+// Alamat IP ESP32-CAM (Otomatis tersimpan di browser jika diubah lewat tombol ⚙️ IP CAM)
+let ESPCAM_IP = localStorage.getItem('aegis_cam_ip') || "http://10.78.168.1";
 
 window.moveCam = function(direction) {
     fetch(`${ESPCAM_IP}/action?go=${direction}`)
         .then(res => res.json())
         .then(data => addLog('CAM', `Servo Pan:${data.pan}° Tilt:${data.tilt}°`))
         .catch(() => addLog('ERR', `ESP32-CAM (${ESPCAM_IP}) belum merespons.`));
+};
+
+window.changeCamIPPrompt = function() {
+    let currentIP = ESPCAM_IP.replace('http://', '');
+    let inputIP = prompt("Masukkan IP ESP32-CAM Anda (contoh: 10.78.168.1):", currentIP);
+    if (inputIP && inputIP.trim() !== "") {
+        let cleanIP = inputIP.replace('http://', '').replace(':81/stream', '').trim();
+        ESPCAM_IP = `http://${cleanIP}`;
+        localStorage.setItem('aegis_cam_ip', ESPCAM_IP);
+        const camEl = document.getElementById('espcam-stream');
+        const labelEl = document.getElementById('cam-ip-label');
+        if (camEl) camEl.src = `${ESPCAM_IP}:81/stream`;
+        if (labelEl) labelEl.innerText = `${cleanIP}:81`;
+        addLog('CAM', `Streaming kamera diarahkan ke ${ESPCAM_IP}:81/stream`);
+    }
+};
+
+window.toggleFullscreenCam = function() {
+    const camBox = document.getElementById('cctv-feed');
+    if (!document.fullscreenElement) {
+        camBox.requestFullscreen().catch(() => {});
+    } else {
+        document.exitFullscreen();
+    }
 };
 
 let currentWaterLevel = 0; let currentStatus = "AMAN"; let previousStatus = null;
@@ -95,10 +119,10 @@ window.toggleYolo = function() {
         yoloInterval = setInterval(() => {
             yCanvas.innerHTML = ''; let numBoxes = Math.floor(Math.random() * 2) + 1;
             for(let i=0; i<numBoxes; i++) {
-                let w = 50 + Math.random() * 50; let h = 40 + Math.random() * 40;
+                let w = 60 + Math.random() * 70; let h = 50 + Math.random() * 60;
                 let x = Math.random() * (yCanvas.clientWidth - w); let y = Math.random() * (yCanvas.clientHeight - h);
                 let conf = (85 + Math.random() * 14).toFixed(1);
-                let classes = ['WATER_LEVEL', 'DEBRIS', 'OBSTACLE']; let cls = classes[Math.floor(Math.random()*classes.length)];
+                let classes = ['WATER_SURFACE', 'DEBRIS', 'DRAIN_FLOW']; let cls = classes[Math.floor(Math.random()*classes.length)];
                 yCanvas.innerHTML += `<div class="yolo-bbox" style="width:${w}px; height:${h}px; left:${x}px; top:${y}px;"><div class="yolo-label">${cls} ${conf}%</div></div>`;
             }
         }, 1200);
@@ -121,7 +145,7 @@ function verifyLogin() {
 function startBootSequence() {
     document.getElementById('boot-screen').style.visibility = 'visible'; document.getElementById('boot-screen').style.opacity = '1';
     const bootLog = document.getElementById('boot-log');
-    const messages = [ "> MENGHUBUNGKAN KE FIREBASE WEBSOCKET...", "> MENGKALIBRASI CH340E SERIAL COM...", "> MEMUAT MACHINE LEARNING PREDICTION ENGINE...", "> SISTEM A.E.G.I.S CLOUD SIAP." ];
+    const messages = [ "> MENGHUBUNGKAN KE FIREBASE WEBSOCKET...", "> MEMUAT PETA SATELIT KALIDERES...", "> MENGAKTIFKAN STREAMING ESP32-CAM...", "> SISTEM A.E.G.I.S CLOUD SIAP." ];
     let i = 0;
     let bootInterval = setInterval(() => {
         if(i < messages.length) { bootLog.innerHTML += messages[i] + "<br>"; playBeep(400 + (i*100), 'square', 0.05, 0.02); i++; } 
@@ -135,7 +159,9 @@ function startBootSequence() {
                         document.getElementById('dashboard-core').style.opacity = '1';
                         systemBooted = true;
                         const camImg = document.getElementById('espcam-stream');
+                        const camLbl = document.getElementById('cam-ip-label');
                         if (camImg) camImg.src = `${ESPCAM_IP}:81/stream`;
+                        if (camLbl) camLbl.innerText = `${ESPCAM_IP.replace('http://', '')}:81`;
                         initMapsAndCharts();
                         startFirebaseListeners();
                         renderFluid();
@@ -147,11 +173,47 @@ function startBootSequence() {
     }, 400);
 }
 
-let isLightMode = false; var mapTilesDark = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'; 
-var mapTilesLight = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';() {
+// ==========================================
+// REAL MAP ENGINE (SATELLITE & OPENSTREETMAP TANPA API KEY)
+// ==========================================
+let isLightMode = false;
+let isSatelliteMode = true; // Default langsung menampilkan citra satelit asli
+var mapTilesSatellite = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+var mapTilesStreet    = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+var currentTileLayer; var map, waterChart, routingControl, ctx;
+
+let markerUtama, markerHulu, markerHilir, markerPosko;
+const KALIDERES_LAT = -6.1044; const KALIDERES_LNG = 106.7022; 
+const POSKO_LAT = -6.1015; const POSKO_LNG = 106.7085; 
+const HULU_LAT = -6.1150; const HULU_LNG = 106.6950; const HILIR_LAT = -6.0950; const HILIR_LNG = 106.7150;
+
+window.toggleMapLayer = function() {
+    if (!map) return;
+    isSatelliteMode = !isSatelliteMode;
+    map.removeLayer(currentTileLayer);
+    const btnMap = document.getElementById('btn-map-mode');
+    if (isSatelliteMode) {
+        currentTileLayer = L.tileLayer(mapTilesSatellite, { maxZoom: 19, attribution: 'Esri Satellite | A.E.G.I.S' }).addTo(map);
+        if (btnMap) btnMap.innerHTML = '🗺️ MODE JALAN';
+        addLog('MAP', 'Beralih ke Citra Satelit Real-View.');
+    } else {
+        currentTileLayer = L.tileLayer(mapTilesStreet, { maxZoom: 19, attribution: 'OpenStreetMap | A.E.G.I.S' }).addTo(map);
+        if (btnMap) btnMap.innerHTML = '🛰️ MODE SATELIT';
+        addLog('MAP', 'Beralih ke Peta Jalan OpenStreetMap.');
+    }
+};
+
+window.centerMap = function() {
+    if (map) {
+        map.setView([KALIDERES_LAT, KALIDERES_LNG], 16);
+        addLog('MAP', 'Fokus kamera peta dikembalikan ke Node Utama Kp. Sawah Mede.');
+    }
+};
+
+function toggleTheme() {
     isLightMode = !isLightMode; document.body.classList.toggle('light-mode'); let btn = document.getElementById('btn-theme');
-    if(isLightMode) { btn.innerHTML = '🌙 GELAP'; map.removeLayer(currentTileLayer); currentTileLayer = L.tileLayer(mapTilesLight).addTo(map); Chart.defaults.color = '#64748b'; Chart.defaults.borderColor = 'rgba(0,0,0,0.1)'; } 
-    else { btn.innerHTML = '🌞 TERANG'; map.removeLayer(currentTileLayer); currentTileLayer = L.tileLayer(mapTilesDark).addTo(map); Chart.defaults.color = '#94a3b8'; Chart.defaults.borderColor = 'rgba(14,165,233,0.1)'; }
+    if(isLightMode) { btn.innerHTML = '🌙 GELAP'; Chart.defaults.color = '#64748b'; Chart.defaults.borderColor = 'rgba(0,0,0,0.1)'; } 
+    else { btn.innerHTML = '🌞 TERANG'; Chart.defaults.color = '#94a3b8'; Chart.defaults.borderColor = 'rgba(14,165,233,0.1)'; }
     waterChart.update();
 }
 
@@ -163,7 +225,7 @@ if(recognition) {
     recognition.onresult = function(e) {
         clearTimeout(aiTimeout); const perintah = e.results[e.results.length - 1][0].transcript.toLowerCase(); addLog('AI', `In: "${perintah}"`);
         let jawaban = "Sistem gagal menemukan referensi dalam memori lokal. Harap ulangi instruksi.";
-        if(perintah.includes('air') || perintah.includes('banjir')) jawaban = `Debit air saat ini ${currentWaterLevel} sentimeter. Kalkulasi sistem berada pada status ${currentStatus}.`; 
+        if(perintah.includes('air') || perintah.includes('banjir')) jawaban = `Tinggi air saat ini ${currentWaterLevel} sentimeter. Status ${currentStatus}.`; 
         else if(perintah.includes('cuaca')) jawaban = `Pemindaian satelit menunjukkan cuaca ${document.getElementById('teks-cuaca').innerText}.`; 
         else if(perintah.includes('pompa') || perintah.includes('flow')) jawaban = `Aliran air saat ini ${document.getElementById('yf-flowrate').innerText} liter per menit.`; 
         else if(perintah.includes('suhu')) jawaban = `Termal internal stabil di angka ${document.getElementById('teks-suhu').innerText} derajat celcius.`;
@@ -203,7 +265,7 @@ function playVoiceAlarm(status) {
 setInterval(() => { const now = new Date(); document.getElementById('teks-jam').innerText = now.toLocaleTimeString('id-ID', { hour12: false }); document.getElementById('teks-tanggal').innerText = now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' }).toUpperCase(); }, 1000);
 
 // ==========================================
-// TERMINAL COMMANDS (GHOST IN THE MACHINE)
+// TERMINAL COMMANDS
 // ==========================================
 function addLog(tipe, pesan) {
     let term = document.getElementById('terminalLog'); let time = new Date().toLocaleTimeString('id-ID', { hour12: false }); 
@@ -225,11 +287,11 @@ document.getElementById('cmd-input').addEventListener('keypress', function(e) {
         } else if (cmd.startsWith('setcam ')) {
             let ipBaru = cmd.replace('setcam ', '').trim();
             ESPCAM_IP = `http://${ipBaru}`;
+            localStorage.setItem('aegis_cam_ip', ESPCAM_IP);
             const camEl = document.getElementById('espcam-stream');
-            if (camEl) {
-                camEl.style.display = 'block';
-                camEl.src = `${ESPCAM_IP}:81/stream`;
-            }
+            const lblEl = document.getElementById('cam-ip-label');
+            if (camEl) camEl.src = `${ESPCAM_IP}:81/stream`;
+            if (lblEl) lblEl.innerText = `${ipBaru}:81`;
             addLog('CAM', `IP Kamera diubah ke: ${ESPCAM_IP}`);
         } else if (cmd === 'override aegis') { 
             playBeep(2500, 'sawtooth', 0.5, 0.2);
@@ -245,20 +307,33 @@ document.getElementById('cmd-input').addEventListener('keypress', function(e) {
     }
 });
 
-let markerUtama, markerHulu, markerHilir, markerPosko;
-const KALIDERES_LAT = -6.1044; const KALIDERES_LNG = 106.7022; 
-const POSKO_LAT = -6.1015; const POSKO_LNG = 106.7085; 
-const HULU_LAT = -6.1150; const HULU_LNG = 106.6950; const HILIR_LAT = -6.0950; const HILIR_LNG = 106.7150;
-
 function initMapsAndCharts() {
-    map = L.map('map', {zoomControl: false}).setView([KALIDERES_LAT, KALIDERES_LNG], 14); 
-    currentTileLayer = L.tileLayer(mapTilesDark, { attribution: 'A.E.G.I.S Mapping' }).addTo(map);
+    // Zoom level 16 agar langsung fokus ke jalan/bangunan di sekitar Kp. Sawah Mede Kalideres
+    map = L.map('map', {zoomControl: true}).setView([KALIDERES_LAT, KALIDERES_LNG], 15); 
+    currentTileLayer = L.tileLayer(mapTilesSatellite, { maxZoom: 19, attribution: 'Esri Satellite | A.E.G.I.S Mapping' }).addTo(map);
+    const btnMap = document.getElementById('btn-map-mode');
+    if (btnMap) btnMap.innerHTML = '🗺️ MODE JALAN';
     
-    iconAman = L.divIcon({className: 'sonar-marker', iconSize: [16,16]}); iconWaspada = L.divIcon({className: 'sonar-marker sonar-warning', iconSize: [16,16]}); iconBahaya = L.divIcon({className: 'sonar-marker sonar-danger', iconSize: [16,16]});
-    markerHulu = L.marker([HULU_LAT, HULU_LNG], {icon: iconWaspada}).addTo(map).bindPopup('NODE HULU'); markerHilir = L.marker([HILIR_LAT, HILIR_LNG], {icon: iconAman}).addTo(map).bindPopup('NODE HILIR');
-    markerUtama = L.marker([KALIDERES_LAT, KALIDERES_LNG], {icon: iconAman}).addTo(map).bindTooltip('<div style="font-family:monospace; font-weight:bold; letter-spacing:1px; color:#0ea5e9;">[ NODE UTAMA ]</div>', {permanent: true, direction: 'top', className: 'custom-tooltip', offset: [0, -10]});
-    var shelterIcon = L.divIcon({className: 'shelter-icon', html: '🏥', iconSize: [30,30]}); markerPosko = L.marker([POSKO_LAT, POSKO_LNG], {icon: shelterIcon}).addTo(map); markerPosko.bindPopup('<div style="text-align:center; font-family:monospace;"><b style="font-size:14px; color:white; display:block; margin-bottom:5px;">SECURE ZONE</b>POSKO KEL. KAMAL</div>', {className: 'evakuasi-popup', closeButton: false, autoClose: false, closeOnClick: false});
-    routingControl = L.Routing.control({ waypoints: [ L.latLng(KALIDERES_LAT, KALIDERES_LNG), L.latLng(POSKO_LAT, POSKO_LNG) ], routeWhileDragging: false, addWaypoints: false, fitSelectedRoutes: true, show: false, createMarker: function() { return null; }, lineOptions: { styles: [{color: '#10b981', opacity: 1, weight: 5, className: 'animate-route'}] } });
+    iconAman = L.divIcon({className: 'sonar-marker', iconSize: [18,18]});
+    iconWaspada = L.divIcon({className: 'sonar-marker sonar-warning', iconSize: [18,18]});
+    iconBahaya = L.divIcon({className: 'sonar-marker sonar-danger', iconSize: [18,18]});
+
+    markerHulu = L.marker([HULU_LAT, HULU_LNG], {icon: iconWaspada}).addTo(map).bindPopup('<b>NODE HULU</b><br>Pemantauan Aliran Masuk');
+    markerHilir = L.marker([HILIR_LAT, HILIR_LNG], {icon: iconAman}).addTo(map).bindPopup('<b>NODE HILIR</b><br>Pemantauan Aliran Keluar');
+    markerUtama = L.marker([KALIDERES_LAT, KALIDERES_LNG], {icon: iconAman}).addTo(map).bindTooltip('<div style="font-family:monospace; font-weight:bold; letter-spacing:1px; color:#0ea5e9;">[ NODE UTAMA - KP. SAWAH MEDE ]</div>', {permanent: true, direction: 'top', className: 'custom-tooltip', offset: [0, -10]});
+
+    var shelterIcon = L.divIcon({className: 'shelter-icon', html: '🏥', iconSize: [30,30]});
+    markerPosko = L.marker([POSKO_LAT, POSKO_LNG], {icon: shelterIcon}).addTo(map);
+    markerPosko.bindPopup('<div style="text-align:center; font-family:monospace;"><b style="font-size:14px; color:white; display:block; margin-bottom:5px;">SECURE ZONE</b>POSKO KEL. KAMAL</div>', {className: 'evakuasi-popup', closeButton: false, autoClose: false, closeOnClick: false});
+
+    routingControl = L.Routing.control({
+        waypoints: [ L.latLng(KALIDERES_LAT, KALIDERES_LNG), L.latLng(POSKO_LAT, POSKO_LNG) ],
+        routeWhileDragging: false, addWaypoints: false, fitSelectedRoutes: true, show: false,
+        createMarker: function() { return null; },
+        lineOptions: { styles: [{color: '#10b981', opacity: 1, weight: 5, className: 'animate-route'}] }
+    });
+
+    setTimeout(() => { map.invalidateSize(); }, 300);
 
     Chart.defaults.color = '#64748b'; Chart.defaults.borderColor = 'rgba(14,165,233,0.1)'; Chart.defaults.font.family = "'Courier New', Courier, monospace";
     ctx = document.getElementById('waterChart').getContext('2d');
@@ -362,7 +437,7 @@ function startFirebaseListeners() {
 
             // 3. Logika Evakuasi & Peta
             if (data.status === 'BAHAYA' && !isEvacActive) {
-                isEvacActive = true; routingControl.addTo(map); markerPosko.openPopup(); map.setView([KALIDERES_LAT, KALIDERES_LNG], 14); database.ref('kontrol/pompa').set("ON"); addLog('SYS', '🚨 PROTOKOL EVAKUASI AKTIF.');
+                isEvacActive = true; routingControl.addTo(map); markerPosko.openPopup(); map.setView([KALIDERES_LAT, KALIDERES_LNG], 15); database.ref('kontrol/pompa').set("ON"); addLog('SYS', '🚨 PROTOKOL EVAKUASI AKTIF.');
             } else if (data.status === 'AMAN' && isEvacActive) {
                 isEvacActive = false; map.removeControl(routingControl); markerPosko.closePopup(); database.ref('kontrol/pompa').set("OFF"); addLog('SYS', '✅ PROTOKOL DIHENTIKAN.');
             }
