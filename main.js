@@ -23,21 +23,24 @@ const SERVO_STEP   = 15;
 
 // Fungsi Menggerakkan 2 Servo pada ESP32 Utama (Via Local HTTP + Cloud Firebase Backup)
 window.moveCam = function(direction) {
-    if (direction === 'left')   cloudPanAngle  = Math.min(180, cloudPanAngle + SERVO_STEP);
-    if (direction === 'right')  cloudPanAngle  = Math.max(0, cloudPanAngle - SERVO_STEP);
-    if (direction === 'up')     cloudTiltAngle = Math.max(0, cloudTiltAngle - SERVO_STEP);
-    if (direction === 'down')   cloudTiltAngle = Math.min(180, cloudTiltAngle + SERVO_STEP);
-    if (direction === 'center') { cloudPanAngle = 90; cloudTiltAngle = 90; }
+    // Tukar arah up & down secara otomatis dari sisi Web tanpa perlu upload ulang ESP32
+    let actualDir = direction;
+    if (direction === 'up')   actualDir = 'down';
+    if (direction === 'down') actualDir = 'up';
 
-    // 1. Simpan ke Firebase /kontrol agar tetap bisa digerakkan dari jaringan luar
+    if (actualDir === 'left')   cloudPanAngle  = Math.min(180, cloudPanAngle + SERVO_STEP);
+    if (actualDir === 'right')  cloudPanAngle  = Math.max(0, cloudPanAngle - SERVO_STEP);
+    if (actualDir === 'up')     cloudTiltAngle = Math.max(0, cloudTiltAngle - SERVO_STEP);
+    if (actualDir === 'down')   cloudTiltAngle = Math.min(180, cloudTiltAngle + SERVO_STEP);
+    if (actualDir === 'center') { cloudPanAngle = 90; cloudTiltAngle = 90; }
+
     database.ref('kontrol').update({
         pan: cloudPanAngle,
         tilt: cloudTiltAngle
     });
 
-    // 2. Jika IP ESP32 Utama sudah terdeteksi di jaringan lokal, kirim langsung via HTTP agar instan (0ms delay)
     if (ESPMAIN_IP !== "") {
-        fetch(`${ESPMAIN_IP}/servo?go=${direction}`)
+        fetch(`${ESPMAIN_IP}/servo?go=${actualDir}`)
             .then(res => res.json())
             .then(data => {
                 cloudPanAngle  = data.pan;
@@ -47,8 +50,6 @@ window.moveCam = function(direction) {
             .catch(() => {
                 addLog('SRV', `Cloud Servo -> X(Pan):${cloudPanAngle}° | Y(Tilt):${cloudTiltAngle}°`);
             });
-    } else {
-        addLog('SRV', `Cloud Servo -> X(Pan):${cloudPanAngle}° | Y(Tilt):${cloudTiltAngle}°`);
     }
 };
 
