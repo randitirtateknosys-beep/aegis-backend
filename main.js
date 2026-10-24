@@ -11,16 +11,45 @@ const firebaseConfig = {
 if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
 const database = firebase.database();
 
-// ================= PENGATURAN KAMERA, ZOOM, & LAMPU FLASH =================
-let ESPCAM_IP = localStorage.getItem('aegis_cam_ip') || "http://10.78.168.1";
-let currentCamZoom = 1.0;
-let isCamCoverMode = false; // false = contain (tidak nge-zoom/utuh), true = cover (penuh kotak)
+// ================= PENGATURAN IP KAMERA & IP SERVO (ESP32 UTAMA) =================
+let ESPCAM_IP  = localStorage.getItem('aegis_cam_ip')  || "http://10.78.168.1";
+let ESPMAIN_IP = localStorage.getItem('aegis_main_ip') || ""; // Otomatis terisi dari Firebase (data.node_ip)
 
+let currentCamZoom = 1.0;
+let isCamCoverMode = false;
+let cloudPanAngle  = 90;
+let cloudTiltAngle = 90;
+const SERVO_STEP   = 15;
+
+// Fungsi Menggerakkan 2 Servo pada ESP32 Utama (Via Local HTTP + Cloud Firebase Backup)
 window.moveCam = function(direction) {
-    fetch(`${ESPCAM_IP}/action?go=${direction}`)
-        .then(res => res.json())
-        .then(data => addLog('CAM', `Servo Pan:${data.pan}° Tilt:${data.tilt}°`))
-        .catch(() => addLog('ERR', `ESP32-CAM (${ESPCAM_IP}) belum merespons.`));
+    if (direction === 'left')   cloudPanAngle  = Math.min(180, cloudPanAngle + SERVO_STEP);
+    if (direction === 'right')  cloudPanAngle  = Math.max(0, cloudPanAngle - SERVO_STEP);
+    if (direction === 'up')     cloudTiltAngle = Math.max(0, cloudTiltAngle - SERVO_STEP);
+    if (direction === 'down')   cloudTiltAngle = Math.min(180, cloudTiltAngle + SERVO_STEP);
+    if (direction === 'center') { cloudPanAngle = 90; cloudTiltAngle = 90; }
+
+    // 1. Simpan ke Firebase /kontrol agar tetap bisa digerakkan dari jaringan luar
+    database.ref('kontrol').update({
+        pan: cloudPanAngle,
+        tilt: cloudTiltAngle
+    });
+
+    // 2. Jika IP ESP32 Utama sudah terdeteksi di jaringan lokal, kirim langsung via HTTP agar instan (0ms delay)
+    if (ESPMAIN_IP !== "") {
+        fetch(`${ESPMAIN_IP}/servo?go=${direction}`)
+            .then(res => res.json())
+            .then(data => {
+                cloudPanAngle  = data.pan;
+                cloudTiltAngle = data.tilt;
+                addLog('SRV', `Servo ESP32 -> X(Pan):${data.pan}° | Y(Tilt):${data.tilt}°`);
+            })
+            .catch(() => {
+                addLog('SRV', `Cloud Servo -> X(Pan):${cloudPanAngle}° | Y(Tilt):${cloudTiltAngle}°`);
+            });
+    } else {
+        addLog('SRV', `Cloud Servo -> X(Pan):${cloudPanAngle}° | Y(Tilt):${cloudTiltAngle}°`);
+    }
 };
 
 window.toggleFlashLED = function(customAction = 'flash') {
@@ -201,7 +230,7 @@ function verifyLogin() {
 function startBootSequence() {
     document.getElementById('boot-screen').style.visibility = 'visible'; document.getElementById('boot-screen').style.opacity = '1';
     const bootLog = document.getElementById('boot-log');
-    const messages = [ "> MENGHUBUNGKAN KE FIREBASE WEBSOCKET...", "> MEMUAT PETA SATELIT KALIDERES...", "> MENGAKTIFKAN STREAMING ESP32-CAM...", "> SISTEM A.E.G.I.S CLOUD SIAP." ];
+    const messages = [ "> MENGHUBUNGKAN KE FIREBASE WEBSOCKET...", "> MEMUAT PETA SATELIT KALIDERES...", "> MENGAKTIFKAN STREAMING ESP32-CAM & SERVO...", "> SISTEM A.E.G.I.S CLOUD SIAP." ];
     let i = 0;
     let bootInterval = setInterval(() => {
         if(i < messages.length) { bootLog.innerHTML += messages[i] + "<br>"; playBeep(400 + (i*100), 'square', 0.05, 0.02); i++; } 
@@ -354,6 +383,11 @@ document.getElementById('cmd-input').addEventListener('keypress', function(e) {
             if (camEl) camEl.src = `${ESPCAM_IP}:81/stream`;
             if (lblEl) lblEl.innerText = `${ipBaru}:81`;
             addLog('CAM', `IP Kamera diubah ke: ${ESPCAM_IP}`);
+        } else if (cmd.startsWith('setservo ')) {
+            let ipServo = cmd.replace('setservo ', '').trim();
+            ESPMAIN_IP = `http://${ipServo}`;
+            localStorage.setItem('aegis_main_ip', ESPMAIN_IP);
+            addLog('SRV', `IP Servo ESP32 Utama diubah ke: ${ESPMAIN_IP}`);
         } else if (cmd === 'override aegis') { 
             playBeep(2500, 'sawtooth', 0.5, 0.2);
             document.body.classList.add('danger-mode');
@@ -451,6 +485,16 @@ function startFirebaseListeners() {
             let data = globalHistory[globalHistory.length - 1];
             currentWaterLevel = data.water_level ?? 0;
             currentStatus = data.status ?? "AMAN";
+
+            // Otomatis tangkap IP ESP32 Utama untuk kontrol Servo X & Y
+            if (data.node_ip && data.node_ip !== "") {
+                let detectedIP = `http://${data.node_ip}`;
+                if (ESPMAIN_IP !== detectedIP) {
+                    ESPMAIN_IP = detectedIP;
+                    localStorage.setItem('aegis_main_ip', ESPMAIN_IP);
+                    addLog('SRV', `Node Servo ESP32 Utama terdeteksi di: ${ESPMAIN_IP}`);
+                }
+            }
 
             document.getElementById('teks-air').innerText = currentWaterLevel;
             document.getElementById('teks-suhu').innerText = data.temperature ?? "0.0";
