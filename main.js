@@ -25,10 +25,9 @@ const SERVO_STEP   = 15;
 let relayCH1_Pump   = false;
 let relayCH2_Alarm  = false;
 let relayCH3_Lamp   = false;
-let relayCH4_Charge = "SOLAR"; // "SOLAR" atau "ADAPTOR"
+let relayCH4_Charge = "SOLAR";
 let testAlarmLoop   = null;
 
-// Fungsi Menggerakkan 2 Servo (Sumbu Y sudah dibalik sesuai posisi mekanik Anda)
 window.moveCam = function(direction) {
     if (direction === 'left')   cloudPanAngle  = Math.min(180, cloudPanAngle + SERVO_STEP);
     if (direction === 'right')  cloudPanAngle  = Math.max(0, cloudPanAngle - SERVO_STEP);
@@ -62,20 +61,24 @@ function updateRelayButtonsUI() {
     // CH1: Pompa Air
     const btn1 = document.getElementById('btn-relay-ch1');
     const bdg1 = document.getElementById('badge-ch1');
+    const topPump = document.getElementById('top-pump-stat');
     if (btn1 && bdg1) {
         bdg1.innerText = relayCH1_Pump ? "ON" : "OFF";
         btn1.style.background = relayCH1_Pump ? "var(--primary)" : "transparent";
         btn1.style.color      = relayCH1_Pump ? "#000" : "var(--primary)";
     }
+    if (topPump) topPump.innerText = relayCH1_Pump ? "ON" : "OFF";
 
     // CH2: Alarm Sirine
     const btn2 = document.getElementById('btn-relay-ch2');
     const bdg2 = document.getElementById('badge-ch2');
+    const topAlarm = document.getElementById('top-alarm-stat');
     if (btn2 && bdg2) {
         bdg2.innerText = relayCH2_Alarm ? "ON" : "OFF";
         btn2.style.background = relayCH2_Alarm ? "var(--bahaya)" : "transparent";
         btn2.style.color      = relayCH2_Alarm ? "#fff" : "var(--bahaya)";
     }
+    if (topAlarm) topAlarm.innerText = relayCH2_Alarm ? "ON" : "OFF";
 
     // CH3: Lampu Waspada Orange
     const btn3 = document.getElementById('btn-relay-ch3');
@@ -89,17 +92,20 @@ function updateRelayButtonsUI() {
     // CH4: Mode Charging (Solar Panel vs Adaptor)
     const btn4 = document.getElementById('btn-relay-ch4');
     const bdg4 = document.getElementById('badge-ch4');
+    const topChg = document.getElementById('top-charge-mode');
     if (btn4 && bdg4) {
         if (relayCH4_Charge === "ADAPTOR") {
             bdg4.innerText = "🔌 ADAPTOR";
             btn4.style.borderColor = "#a855f7";
             btn4.style.color       = "#fff";
             btn4.style.background  = "rgba(168, 85, 247, 0.35)";
+            if (topChg) { topChg.innerText = "🔌 ADAPTOR DC"; topChg.style.color = "#a855f7"; }
         } else {
             bdg4.innerText = "☀️ SOLAR";
             btn4.style.borderColor = "var(--aman)";
             btn4.style.color       = "var(--aman)";
             btn4.style.background  = "transparent";
+            if (topChg) { topChg.innerText = "☀️ SOLAR PANEL"; topChg.style.color = "var(--aman)"; }
         }
     }
 }
@@ -117,7 +123,6 @@ window.toggleRelayTest = function(channel) {
         database.ref('kontrol').update({ alarm: st });
         if (ESPMAIN_IP !== "") fetch(`${ESPMAIN_IP}/relay?ch=2&val=${st}`).catch(() => {});
         
-        // Bunyikan juga efek sirine & visual alarm di Web saat Test Alarm ON
         if (relayCH2_Alarm) {
             document.body.classList.add('danger-mode');
             playBeep(2000, 'square', 0.5, 0.15);
@@ -278,6 +283,7 @@ window.pushSimData = function(val) {
         temperature: Number((28 + Math.random() * 2).toFixed(1)),
         timestamp: timeStr,
         water_level: numVal,
+        distance_cm: Math.max(0, 150 - numVal),
         flow_rate_lpm: 0.0,
         mass_flow_kgs: 0.0
     });
@@ -322,7 +328,7 @@ function verifyLogin() {
 function startBootSequence() {
     document.getElementById('boot-screen').style.visibility = 'visible'; document.getElementById('boot-screen').style.opacity = '1';
     const bootLog = document.getElementById('boot-log');
-    const messages = [ "> MENGHUBUNGKAN KE FIREBASE WEBSOCKET...", "> MENGKALIBRASI MODUL RELAY 4-CHANNEL...", "> MENGAKTIFKAN STREAMING ESP32-CAM & SERVO...", "> SISTEM A.E.G.I.S CLOUD SIAP." ];
+    const messages = [ "> MENGHUBUNGKAN KE FIREBASE WEBSOCKET...", "> MENGKALIBRASI MODUL RELAY 4-CHANNEL & INA219...", "> MENGAKTIFKAN STREAMING ESP32-CAM & SERVO...", "> SISTEM A.E.G.I.S CLOUD SIAP." ];
     let i = 0;
     let bootInterval = setInterval(() => {
         if(i < messages.length) { bootLog.innerHTML += messages[i] + "<br>"; playBeep(400 + (i*100), 'square', 0.05, 0.02); i++; } 
@@ -407,9 +413,10 @@ if(recognition) {
         else if(perintah.includes('pompa') || perintah.includes('flow')) jawaban = `Pompa berstatus ${relayCH1_Pump ? 'menyala' : 'siaga'} dengan aliran ${document.getElementById('yf-flowrate').innerText} liter per menit.`; 
         else if(perintah.includes('lampu') || perintah.includes('flash')) { toggleFlashLED(); jawaban = "Mengubah status lampu flash kamera."; }
         else if(perintah.includes('suhu')) jawaban = `Termal internal stabil di angka ${document.getElementById('teks-suhu').innerText} derajat celcius.`;
-        else if(perintah.includes('baterai') || perintah.includes('aki')) jawaban = `Status daya baterai ${document.getElementById('txt-batt').innerText}. Mode pengisian saat ini menggunakan ${relayCH4_Charge}.`;
+        else if(perintah.includes('solar')) jawaban = `Tegangan panel surya saat ini ${document.getElementById('top-solar-v').innerText} volt dengan arus ${document.getElementById('top-solar-i').innerText} miliampere.`;
+        else if(perintah.includes('baterai') || perintah.includes('aki')) jawaban = `Status daya baterai ${document.getElementById('txt-batt').innerText}. Mode pengisian menggunakan ${relayCH4_Charge}.`;
         else if(perintah.includes('sinyal') || perintah.includes('lora')) jawaban = `Kekuatan sinyal LoRa terpantau pada ${document.getElementById('txt-lora').innerText}.`;
-        else if(perintah.includes('laporan') || perintah.includes('sistem')) jawaban = `Diagnosis penuh: Air ${currentWaterLevel} senti, Suhu ${document.getElementById('teks-suhu').innerText} derajat. Seluruh instrumen beroperasi normal.`;
+        else if(perintah.includes('laporan') || perintah.includes('sistem')) jawaban = `Diagnosis penuh: Air ${currentWaterLevel} senti, Suhu ${document.getElementById('teks-suhu').innerText} derajat, Baterai ${document.getElementById('top-batt-v').innerText} volt. Seluruh instrumen beroperasi normal.`;
         addLog('AI', `Out: "${jawaban}"`); let msg = new SpeechSynthesisUtterance(jawaban); msg.lang = 'id-ID'; msg.pitch = 1.1; msg.rate = 0.95; window.speechSynthesis.speak(msg); recognition.stop();
     };
     recognition.onstart = function() { aiTimeout = setTimeout(() => { if(aiListening) { addLog('AI', 'Membatalkan sesi dengar (Timeout).'); toggleVoiceAI(true); } }, 6000); };
@@ -557,7 +564,6 @@ async function fetchWeather() {
 }
 
 function startFirebaseListeners() {
-    // Listener Sinkronisasi Status 4-Channel Relay dari Firebase /kontrol
     database.ref('kontrol').on('value', (snapshot) => {
         let ctrl = snapshot.val() || {};
         relayCH1_Pump   = (ctrl.pompa === "ON" || ctrl.pompa === "MENYALA");
@@ -597,7 +603,11 @@ function startFirebaseListeners() {
                 }
             }
 
+            // 1. Update Kartu Utama Atas (Air, Jarak Sensor, Suhu, Flow Meter)
             document.getElementById('teks-air').innerText = currentWaterLevel;
+            if (document.getElementById('top-jarak')) {
+                document.getElementById('top-jarak').innerText = Number(data.distance_cm ?? Math.max(0, 150 - currentWaterLevel)).toFixed(1);
+            }
             document.getElementById('teks-suhu').innerText = data.temperature ?? "0.0";
             document.getElementById('sim-slider').value = currentWaterLevel;
             document.getElementById('sim-val').innerText = currentWaterLevel;
@@ -606,6 +616,7 @@ function startFirebaseListeners() {
             let massKGS = Number(data.mass_flow_kgs ?? 0).toFixed(2);
 
             if (document.getElementById('teks-flow')) document.getElementById('teks-flow').innerText = flowLPM;
+            if (document.getElementById('top-mass')) document.getElementById('top-mass').innerText = massKGS;
             if (document.getElementById('yf-flowrate')) document.getElementById('yf-flowrate').innerText = flowLPM;
             if (document.getElementById('coriolis-mass')) document.getElementById('coriolis-mass').innerText = massKGS;
 
@@ -615,25 +626,33 @@ function startFirebaseListeners() {
                 document.getElementById('flow-bar').classList.remove('active');
             }
 
-            if (data.solar_v !== undefined && document.getElementById('txt-solar')) {
-                document.getElementById('txt-solar').innerText = `${Number(data.solar_v).toFixed(2)} V | ${Number(data.solar_i ?? 0).toFixed(0)} mA`;
-                if (document.getElementById('bar-solar')) {
-                    document.getElementById('bar-solar').style.width = `${Math.min(Math.round((data.solar_v / 18) * 100), 100)}%`;
-                }
-            }
-            if (data.batt_v !== undefined && document.getElementById('txt-batt')) {
-                let pct = data.batt_pct ?? 92;
-                document.getElementById('txt-batt').innerText = `${Number(data.batt_v).toFixed(2)} V | ${Number(data.batt_i ?? 0).toFixed(0)} mA (${pct}%)`;
-                if (document.getElementById('bar-batt')) {
-                    document.getElementById('bar-batt').style.width = `${pct}%`;
-                }
-            }
-            if (data.lora_rssi !== undefined && document.getElementById('txt-lora')) {
-                document.getElementById('txt-lora').innerText = `${data.lora_rssi} dBm`;
-                document.getElementById('bar-lora').style.width = `${Math.max(10, Math.min(100, 130 + Number(data.lora_rssi)))}%`;
-            }
+            // 2. Update Kartu Atas & Bar Indikator: Solar Panel (INA219 #1)
+            let sV = Number(data.solar_v ?? 0).toFixed(2);
+            let sI = Number(data.solar_i ?? 0).toFixed(0);
+            let sP = Number(data.solar_p ?? (sV * sI)).toFixed(0);
+            if (document.getElementById('top-solar-v')) document.getElementById('top-solar-v').innerText = sV;
+            if (document.getElementById('top-solar-i')) document.getElementById('top-solar-i').innerText = sI;
+            if (document.getElementById('top-solar-p')) document.getElementById('top-solar-p').innerText = sP;
+            if (document.getElementById('txt-solar')) document.getElementById('txt-solar').innerText = `${sV} V | ${sI} mA`;
+            if (document.getElementById('bar-solar')) document.getElementById('bar-solar').style.width = `${Math.min(Math.round((Number(sV) / 18) * 100), 100)}%`;
 
-            // Sinkronisasi Otomatis CH1 (Pompa), CH2 (Alarm), CH3 (Lampu Orange Waspada) Berdasarkan Status Banjir
+            // 3. Update Kartu Atas & Bar Indikator: Baterai / Aki (INA219 #2)
+            let bV   = Number(data.batt_v ?? 0).toFixed(2);
+            let bI   = Number(data.batt_i ?? 0).toFixed(0);
+            let bPct = data.batt_pct ?? 92;
+            if (document.getElementById('top-batt-v')) document.getElementById('top-batt-v').innerText = bV;
+            if (document.getElementById('top-batt-i')) document.getElementById('top-batt-i').innerText = bI;
+            if (document.getElementById('top-batt-pct')) document.getElementById('top-batt-pct').innerText = `${bPct}%`;
+            if (document.getElementById('txt-batt')) document.getElementById('txt-batt').innerText = `${bV} V | ${bI} mA (${bPct}%)`;
+            if (document.getElementById('bar-batt')) document.getElementById('bar-batt').style.width = `${bPct}%`;
+
+            // 4. Update Kartu Atas & Bar Indikator: LoRa Ra-02 SX1278
+            let lRssi = data.lora_rssi ?? -78;
+            if (document.getElementById('top-lora-rssi')) document.getElementById('top-lora-rssi').innerText = lRssi;
+            if (document.getElementById('txt-lora')) document.getElementById('txt-lora').innerText = `${lRssi} dBm`;
+            if (document.getElementById('bar-lora')) document.getElementById('bar-lora').style.width = `${Math.max(10, Math.min(100, 130 + Number(lRssi)))}%`;
+
+            // 5. Logika Otomatis Relay & Peta
             if (data.status === 'BAHAYA' && !isEvacActive) {
                 isEvacActive = true; routingControl.addTo(map); markerPosko.openPopup(); map.setView([KALIDERES_LAT, KALIDERES_LNG], 15);
                 database.ref('kontrol').update({ pompa: "ON", alarm: "ON", lampu: "OFF" });
@@ -654,7 +673,9 @@ function startFirebaseListeners() {
             if (systemBooted) { previousStatus = data.status; }
 
             let persentaseRisiko = Math.min(Math.round((data.water_level / 150) * 100), 100);
-            document.getElementById('txt-risiko').innerText = `${persentaseRisiko}%`; document.getElementById('bar-risiko').style.width = `${persentaseRisiko}%`;
+            document.getElementById('txt-risiko').innerText = `${persentaseRisiko}%`;
+            document.getElementById('bar-risiko').style.width = `${persentaseRisiko}%`;
+            if (document.getElementById('top-risiko')) document.getElementById('top-risiko').innerText = `${persentaseRisiko}%`;
 
             let statusHtml = ''; let dotColor = '#0ea5e9'; let cAir = document.getElementById('card-air'); let cStat = document.getElementById('card-status');
             cAir.className = 'widget-card glass-panel'; cStat.className = 'widget-card glass-panel'; 
@@ -664,7 +685,7 @@ function startFirebaseListeners() {
             else if (data.status === 'BAHAYA') { document.body.classList.add('danger-mode'); statusHtml = `<span class="badge bg-bahaya">CRITICAL EVAC!</span>`; cAir.style.borderColor = 'var(--bahaya)'; cStat.style.borderColor = 'var(--bahaya)'; dotColor = '#ef4444'; document.getElementById('bar-risiko').style.background = 'var(--bahaya)'; markerUtama.setIcon(iconBahaya); markerHulu.setIcon(iconBahaya); markerHilir.setIcon(iconBahaya); fluidColor = 'rgba(239, 68, 68, 0.4)'; }
             
             document.getElementById('teks-status').innerHTML = statusHtml; playVoiceAlarm(data.status);
-            if (window.lastTimestamp !== data.timestamp) { addLog(data.status === 'BAHAYA' ? 'ERR' : 'DAT', `⬇️ CLOUD PUSH: W=${data.water_level}cm F=${flowLPM}L/m T=${data.temperature}C`); window.lastTimestamp = data.timestamp; }
+            if (window.lastTimestamp !== data.timestamp) { addLog(data.status === 'BAHAYA' ? 'ERR' : 'DAT', `⬇️ CLOUD PUSH: W=${data.water_level}cm | Solar=${sV}V | Batt=${bV}V`); window.lastTimestamp = data.timestamp; }
 
             let labels = globalHistory.map(item => item.timestamp); 
             let actualData = globalHistory.map(item => item.water_level);
@@ -689,11 +710,24 @@ function startFirebaseListeners() {
             else { newGrad.addColorStop(0, 'rgba(14, 165, 233, 0.3)'); newGrad.addColorStop(1, 'rgba(14, 165, 233, 0.0)'); }
             waterChart.data.datasets[0].backgroundColor = newGrad; waterChart.update();
             
+            // 6. Update Tabel Lengkap (Air, Flow, Suhu, Solar, Baterai, LoRa, Status)
             let tableHTML = '';
             [...globalHistory].reverse().slice(0, 20).forEach(item => { 
                 let ws = item.status === 'BAHAYA' ? '#ef4444' : (item.status === 'WASPADA' ? '#f59e0b' : '#10b981'); 
-                let itemFlow = item.flow_rate_lpm !== undefined ? `${Number(item.flow_rate_lpm).toFixed(1)} L/m` : '0.0 L/m';
-                tableHTML += `<tr><td>${item.timestamp}</td><td><span style="color:#0ea5e9;">${item.device_id}</span></td><td><b>${item.water_level} cm</b></td><td>${itemFlow}</td><td>${item.temperature} °C</td><td style="color:${ws}; font-weight:bold;">${item.status}</td></tr>`; 
+                let itemFlow  = item.flow_rate_lpm !== undefined ? `${Number(item.flow_rate_lpm).toFixed(1)} L/m` : '0.0 L/m';
+                let itemSolar = item.solar_v !== undefined ? `${Number(item.solar_v).toFixed(2)}V (${Number(item.solar_i ?? 0).toFixed(0)}mA)` : '0.00V (0mA)';
+                let itemBatt  = item.batt_v !== undefined ? `${Number(item.batt_v).toFixed(2)}V (${item.batt_pct ?? 92}%)` : '0.00V (92%)';
+                let itemLora  = item.lora_rssi !== undefined ? `${item.lora_rssi} dBm` : '-78 dBm';
+                tableHTML += `<tr>
+                    <td>${item.timestamp}</td>
+                    <td><b>${item.water_level} cm</b></td>
+                    <td>${itemFlow}</td>
+                    <td>${item.temperature} °C</td>
+                    <td style="color:#facc15;">${itemSolar}</td>
+                    <td style="color:#10b981;">${itemBatt}</td>
+                    <td style="color:#0ea5e9;">${itemLora}</td>
+                    <td style="color:${ws}; font-weight:bold;">${item.status}</td>
+                </tr>`; 
             });
             document.getElementById('tableBody').innerHTML = tableHTML;
         }
@@ -702,14 +736,14 @@ function startFirebaseListeners() {
 
 function downloadCSV() {
     if (!globalHistory.length) return;
-    let csv = "Waktu,Node ID,Water Level (cm),Flow Rate (L/min),Temperature (C),Status\n";
+    let csv = "Waktu,Node ID,Water Level (cm),Flow Rate (L/min),Temperature (C),Solar (V),Solar (mA),Battery (V),Battery (mA),Battery (%),LoRa RSSI (dBm),Status\n";
     globalHistory.forEach(r => {
-        csv += `${r.timestamp},${r.device_id},${r.water_level},${r.flow_rate_lpm ?? 0},${r.temperature},${r.status}\n`;
+        csv += `${r.timestamp},${r.device_id},${r.water_level},${r.flow_rate_lpm ?? 0},${r.temperature},${r.solar_v ?? 0},${r.solar_i ?? 0},${r.batt_v ?? 0},${r.batt_i ?? 0},${r.batt_pct ?? 92},${r.lora_rssi ?? -78},${r.status}\n`;
     });
     let blob = new Blob([csv], { type: 'text/csv' });
     let a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'aegis_telemetry.csv';
+    a.download = 'aegis_telemetry_full.csv';
     a.click();
 }
 
