@@ -14,7 +14,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
-    <link rel="stylesheet" href="./style.css?v=godtier4">
+    <link rel="stylesheet" href="./style.css?v=godtier5">
 </head>
 <body id="report-area">
 
@@ -23,9 +23,12 @@
             <h4 style="color:var(--primary); margin-top:0; font-family:var(--font-tech); text-shadow: 0 0 10px var(--primary);">CONTROL DECK</h4>
             <p style="font-size:10px; color:var(--text-muted);">Injeksi data manual ke Cloud:</p>
             <input type="range" id="sim-slider" min="0" max="150" value="0" oninput="updateSimValue(this.value)" onchange="pushSimData(this.value)">
-            <div style="text-align:center; font-weight:bold; font-size:24px; color:var(--primary); margin-bottom:15px; text-shadow:0 0 10px var(--primary);"><span id="sim-val">0</span> CM</div>
-            <button class="btn-sfx deck-btn" onclick="forceGlitch()" style="margin-bottom:10px; color:var(--waspada); border-color:var(--waspada);">⚡ TEST GLITCH</button>
-            <button class="btn-sfx deck-btn" onclick="pushSimData(150)" style="background:var(--bahaya); color:#fff; border:none; box-shadow:0 0 15px var(--bahaya);">🚨 FORCE DANGER</button>
+            <div style="text-align:center; font-weight:bold; font-size:24px; color:var(--primary); margin-bottom:12px; text-shadow:0 0 10px var(--primary);"><span id="sim-val">0</span> CM</div>
+            <button class="btn-sfx deck-btn" onclick="toggleRelayTest(1)" style="margin-bottom:8px; padding:8px; font-size:11px;">🚰 TEST POMPA (CH1)</button>
+            <button class="btn-sfx deck-btn" onclick="toggleRelayTest(2)" style="margin-bottom:8px; padding:8px; font-size:11px; color:var(--bahaya); border-color:var(--bahaya);">🚨 TEST ALARM (CH2)</button>
+            <button class="btn-sfx deck-btn" onclick="toggleRelayTest(3)" style="margin-bottom:8px; padding:8px; font-size:11px; color:var(--waspada); border-color:var(--waspada);">🟠 TEST LAMPU WASPADA (CH3)</button>
+            <button class="btn-sfx deck-btn" onclick="toggleChargeMode()" style="margin-bottom:8px; padding:8px; font-size:11px; color:var(--aman); border-color:var(--aman);">⚡ GANTI MODE CHARGE (CH4)</button>
+            <button class="btn-sfx deck-btn" onclick="pushSimData(150)" style="background:var(--bahaya); color:#fff; border:none; padding:10px; box-shadow:0 0 15px var(--bahaya);">🚨 FORCE DANGER</button>
         </div>
     </div>
 
@@ -135,7 +138,6 @@
                         </div>
                     </div>
                     <div class="cctv-feed" id="cctv-feed">
-                        <!-- Default object-fit: contain agar seluruh tangkapan lensa tampil utuh & tidak nge-zoom sendiri -->
                         <img id="espcam-stream" src="http://10.78.168.1:81/stream" style="width:100%; height:100%; object-fit:contain; position:absolute; top:0; left:0; z-index:0; transition: transform 0.25s ease;" alt="ESP32-CAM Stream">
                         
                         <div class="cctv-overlay">
@@ -143,15 +145,13 @@
                             <div class="cctv-badge">ZOOM: <span id="cam-zoom-label">1.0x</span> | FLASH: <span id="cam-flash-badge">OFF</span></div>
                         </div>
 
-                        <!-- Kontrol Zoom In / Zoom Out & Lampu Flash di Kiri Bawah Kamera -->
                         <div style="position:absolute; bottom:12px; left:12px; z-index:10; display:flex; gap:5px; background:rgba(0,5,15,0.75); padding:6px 8px; border-radius:8px; border:1px solid rgba(14,165,233,0.4); backdrop-filter:blur(6px); align-items:center;">
-                            <button class="btn-servo btn-sfx" style="width:30px; height:30px;" onclick="adjustZoom(-0.2)" title="Zoom Out (Perkecil)">➖</button>
+                            <button class="btn-servo btn-sfx" style="width:30px; height:30px;" onclick="adjustZoom(-0.2)" title="Zoom Out">➖</button>
                             <button class="btn-servo btn-sfx" style="padding:0 8px; height:30px; font-size:10px; font-family:var(--font-tech);" onclick="resetZoom()" title="Reset 1.0x">1.0x</button>
-                            <button class="btn-servo btn-sfx" style="width:30px; height:30px;" onclick="adjustZoom(0.2)" title="Zoom In (Perbesar)">➕</button>
-                            <button class="btn-servo btn-sfx" style="width:32px; height:30px; border-color:#facc15; color:#facc15;" onclick="toggleFlashLED()" title="Lampu Cahaya Flash LED">💡</button>
+                            <button class="btn-servo btn-sfx" style="width:30px; height:30px;" onclick="adjustZoom(0.2)" title="Zoom In">➕</button>
+                            <button class="btn-servo btn-sfx" style="width:32px; height:30px; border-color:#facc15; color:#facc15;" onclick="toggleFlashLED()" title="Lampu Flash LED">💡</button>
                         </div>
 
-                        <!-- Kontrol Pan-Tilt Servo di Kanan Bawah Kamera -->
                         <div class="servo-pad">
                             <div></div>
                             <button class="btn-servo btn-sfx" onclick="moveCam('up')" title="Atas">▲</button>
@@ -165,6 +165,36 @@
                         </div>
 
                         <div id="yolo-canvas" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:5; pointer-events:none; display:none;"></div>
+                    </div>
+                </div>
+
+                <!-- PANEL BARU: KONTROL & TEST MODUL RELAY 4-CHANNEL -->
+                <div class="content-box glass-panel" style="border-color: var(--primary);">
+                    <div class="header-box">
+                        <h3 style="color: var(--primary);">⚡ 4-CHANNEL RELAY CONTROL & DIAGNOSTIC TEST</h3>
+                        <span style="font-size: 9px; font-family: var(--font-tech); color: var(--text-muted);">5V 4-CH RELAY</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <!-- CH1: TEST POMPA -->
+                        <button id="btn-relay-ch1" class="btn-export btn-sfx" onclick="toggleRelayTest(1)" style="padding: 10px; justify-content: space-between; font-weight: bold; border-color: var(--primary);">
+                            <span>🚰 CH1: TEST POMPA</span>
+                            <span id="badge-ch1" style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">OFF</span>
+                        </button>
+                        <!-- CH2: TEST ALARM -->
+                        <button id="btn-relay-ch2" class="btn-export btn-sfx" onclick="toggleRelayTest(2)" style="padding: 10px; justify-content: space-between; font-weight: bold; border-color: var(--bahaya); color: var(--bahaya);">
+                            <span>🚨 CH2: TEST ALARM</span>
+                            <span id="badge-ch2" style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">OFF</span>
+                        </button>
+                        <!-- CH3: LAMPU ORANGE WASPADA -->
+                        <button id="btn-relay-ch3" class="btn-export btn-sfx" onclick="toggleRelayTest(3)" style="padding: 10px; justify-content: space-between; font-weight: bold; border-color: var(--waspada); color: var(--waspada);">
+                            <span>🟠 CH3: LAMPU WASPADA</span>
+                            <span id="badge-ch3" style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">OFF</span>
+                        </button>
+                        <!-- CH4: MODE PENGISIAN SOLAR / ADAPTOR -->
+                        <button id="btn-relay-ch4" class="btn-export btn-sfx" onclick="toggleChargeMode()" style="padding: 10px; justify-content: space-between; font-weight: bold; border-color: var(--aman); color: var(--aman);">
+                            <span>⚡ CH4: SUMBER CHARGE</span>
+                            <span id="badge-ch4" style="background: rgba(16,185,129,0.2); padding: 2px 6px; border-radius: 4px;">☀️ SOLAR</span>
+                        </button>
                     </div>
                 </div>
 
@@ -207,12 +237,12 @@
                     <div class="header-box"><h3>💻 CLOUD TERMINAL (ROOT)</h3></div>
                     <div class="terminal-box">
                         <div id="terminalLog"><div class="terminal-line"><span style="color:#64748b;">[INIT]</span> <span style="color:var(--text-main);">A.E.G.I.S Firebase SDK Booting... OK</span></div></div>
-                        <div class="terminal-input-wrapper"><span style="color:#0ea5e9;">cloud@aegis:~#</span><input type="text" id="cmd-input" class="terminal-input" placeholder="Ketik 'flash on', 'flash off', 'pump on', atau 'setcam 10.78.168.1'..." autocomplete="off" spellcheck="false"></div>
+                        <div class="terminal-input-wrapper"><span style="color:#0ea5e9;">cloud@aegis:~#</span><input type="text" id="cmd-input" class="terminal-input" placeholder="Ketik 'pump on', 'alarm on', 'mode solar', 'mode adaptor'..." autocomplete="off" spellcheck="false"></div>
                     </div>
                 </div>
             </div>
         </div>
     </div> 
-    <script src="./main.js?v=godtier4"></script>
+    <script src="./main.js?v=godtier5"></script>
 </body>
 </html>
