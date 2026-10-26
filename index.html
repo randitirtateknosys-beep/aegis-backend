@@ -14,7 +14,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
-    <link rel="stylesheet" href="./style.css?v=godtier6">
+    <link rel="stylesheet" href="./style.css?v=godtier7">
 </head>
 <body id="report-area">
 
@@ -27,7 +27,7 @@
             <button class="btn-sfx deck-btn" onclick="toggleRelayTest(1)" style="margin-bottom:8px; padding:8px; font-size:11px;">🚰 TEST POMPA (CH1)</button>
             <button class="btn-sfx deck-btn" onclick="toggleRelayTest(2)" style="margin-bottom:8px; padding:8px; font-size:11px; color:var(--bahaya); border-color:var(--bahaya);">🚨 TEST ALARM (CH2)</button>
             <button class="btn-sfx deck-btn" onclick="toggleRelayTest(3)" style="margin-bottom:8px; padding:8px; font-size:11px; color:var(--waspada); border-color:var(--waspada);">🟠 TEST LAMPU WASPADA (CH3)</button>
-            <button class="btn-sfx deck-btn" onclick="toggleChargeMode()" style="margin-bottom:8px; padding:8px; font-size:11px; color:var(--aman); border-color:var(--aman);">⚡ GANTI MODE CHARGE (CH4)</button>
+            <button class="btn-sfx deck-btn" onclick="simulateBatteryVoltage(6.2)" style="margin-bottom:8px; padding:8px; font-size:11px; color:#a855f7; border-color:#a855f7;">🧪 SIMULASI AKI DROP (6.2V)</button>
             <button class="btn-sfx deck-btn" onclick="pushSimData(150)" style="background:var(--bahaya); color:#fff; border:none; padding:10px; box-shadow:0 0 15px var(--bahaya);">🚨 FORCE DANGER</button>
         </div>
     </div>
@@ -68,9 +68,8 @@
             </div>
         </div>
 
-        <!-- BARIS WIDGET ATAS (8 KARTU: SENSOR LINGKUNGAN + TELEMETRI DAYA INA219 & LORA) -->
+        <!-- BARIS 8 WIDGET UTAMA (SELALU TAMPIL DI SEMUA SUB-MENU) -->
         <div class="widget-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
-            <!-- 1. Status Kota -->
             <div class="widget-card glass-panel" id="card-status">
                 <div class="widget-info" style="z-index:2;">
                     <h4>STATUS KOTA</h4>
@@ -80,7 +79,6 @@
                 <div class="widget-icon" style="z-index:2;">🛡️</div>
             </div>
 
-            <!-- 2. Tinggi Banjir -->
             <div class="widget-card glass-panel" id="card-air" style="overflow: hidden; position: relative;">
                 <canvas id="fluid-canvas" style="position:absolute; bottom:0; left:0; width:100%; height:100%; z-index:0; opacity:0.35;"></canvas>
                 <div class="widget-info" style="z-index:2;">
@@ -91,7 +89,6 @@
                 <div class="widget-icon" style="color:var(--primary); z-index:2;">🌊</div>
             </div>
 
-            <!-- 3. Flow Meter Air -->
             <div class="widget-card glass-panel">
                 <div class="widget-info" style="z-index:2;">
                     <h4>FLOW METER (YF-S201)</h4>
@@ -101,7 +98,6 @@
                 <div class="widget-icon" style="color:var(--primary); z-index:2;">🚰</div>
             </div>
 
-            <!-- 4. Suhu & Cuaca -->
             <div class="widget-card glass-panel">
                 <div class="widget-info" style="z-index:2;">
                     <h4>SUHU & CUACA</h4>
@@ -111,7 +107,6 @@
                 <div class="widget-icon" style="color:var(--primary); z-index:2;">🌡️</div>
             </div>
 
-            <!-- 5. Solar Panel (INA219 #1) -->
             <div class="widget-card glass-panel" style="border-color: rgba(245, 158, 11, 0.35);">
                 <div class="widget-info" style="z-index:2;">
                     <h4 style="color: var(--waspada);">☀️ SOLAR PANEL (INA219 #1)</h4>
@@ -121,8 +116,7 @@
                 <div class="widget-icon" style="z-index:2;">☀️</div>
             </div>
 
-            <!-- 6. Baterai / Aki (INA219 #2) -->
-            <div class="widget-card glass-panel" style="border-color: rgba(16, 185, 129, 0.35);">
+            <div class="widget-card glass-panel" id="card-batt" style="border-color: rgba(16, 185, 129, 0.35);">
                 <div class="widget-info" style="z-index:2;">
                     <h4 style="color: var(--aman);">🔋 BATERAI / AKI (INA219 #2)</h4>
                     <p><span id="top-batt-v">0.00</span> <span style="font-size: 14px; color: var(--aman);">VOLT</span></p>
@@ -131,7 +125,6 @@
                 <div class="widget-icon" style="z-index:2;">🔋</div>
             </div>
 
-            <!-- 7. Sinyal LoRa Ra-02 SX1278 -->
             <div class="widget-card glass-panel">
                 <div class="widget-info" style="z-index:2;">
                     <h4>📡 SINYAL LORA (RA-02)</h4>
@@ -141,180 +134,332 @@
                 <div class="widget-icon" style="color:var(--primary); z-index:2;">📡</div>
             </div>
 
-            <!-- 8. Mode Pengisian & Status Relay -->
-            <div class="widget-card glass-panel">
+            <div class="widget-card glass-panel" id="card-charge">
                 <div class="widget-info" style="z-index:2;">
                     <h4>⚡ SUMBER PENGISIAN (CH4)</h4>
                     <p id="top-charge-mode" style="font-size: 20px; color: var(--aman); margin-top: 10px;">☀️ SOLAR PANEL</p>
-                    <div style="font-size:10px; color:var(--text-muted); font-family:var(--font-tech); margin-top:4px;">POMPA: <span id="top-pump-stat" style="color:var(--primary); font-weight:bold;">OFF</span> | ALARM: <span id="top-alarm-stat" style="color:var(--bahaya); font-weight:bold;">OFF</span></div>
+                    <div style="font-size:10px; color:var(--text-muted); font-family:var(--font-tech); margin-top:4px;">ATS (<7V): <span id="top-ats-stat" style="color:var(--aman); font-weight:bold;">AUTO</span> | POMPA: <span id="top-pump-stat" style="color:var(--primary); font-weight:bold;">OFF</span></div>
                 </div>
                 <div class="widget-icon" style="z-index:2;">⚡</div>
             </div>
         </div>
 
-        <div class="grand-layout" id="hologram-area" style="transition: all 0.8s cubic-bezier(0.25, 0.8, 0.25, 1);">
-            <div class="left-column">
-                <div class="content-box glass-panel">
-                    <div class="header-box">
-                        <h3>🗺️ PETA LOKASI REAL & RADAR SONAR (KALIDERES)</h3>
-                        <div style="display:flex; gap:8px; align-items:center;">
-                            <button class="btn-export btn-sfx" id="btn-map-mode" onclick="toggleMapLayer()" style="padding:4px 8px; font-size:10px;">🛰️ MODE SATELIT</button>
-                            <button class="btn-export btn-sfx" onclick="centerMap()" style="padding:4px 8px; font-size:10px;">🎯 FOKUS LOKASI</button>
+        <!-- BILAH NAVIGASI SUB-MENU TAKTIS -->
+        <div class="sub-nav-bar glass-panel">
+            <button class="sub-nav-btn active btn-sfx" id="tab-btn-overview" onclick="switchSubMenu('overview')">
+                🛡️ OVERVIEW UTAMA (COMMAND CENTER)
+            </button>
+            <button class="sub-nav-btn btn-sfx" id="tab-btn-power" onclick="switchSubMenu('power')">
+                ⚡ TELEMETRI DAYA, GRAFIK INA219 & SMART ATS (&lt; 7V)
+            </button>
+            <button class="sub-nav-btn btn-sfx" id="tab-btn-logs" onclick="switchSubMenu('logs')">
+                📋 DATABASE RIWAYAT & LAPORAN LENGKAP
+            </button>
+        </div>
+
+        <div id="hologram-area" style="transition: all 0.8s cubic-bezier(0.25, 0.8, 0.25, 1);">
+            
+            <!-- ======================================================================= -->
+            <!-- SUB-MENU 1: OVERVIEW UTAMA (DIPERTAHANKAN UTUH SESUAI DESAIN AWAL)      -->
+            <!-- ======================================================================= -->
+            <div id="view-overview" class="grand-layout">
+                <div class="left-column">
+                    <div class="content-box glass-panel">
+                        <div class="header-box">
+                            <h3>🗺️ PETA LOKASI REAL & RADAR SONAR (KALIDERES)</h3>
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <button class="btn-export btn-sfx" id="btn-map-mode" onclick="toggleMapLayer()" style="padding:4px 8px; font-size:10px;">🛰️ MODE SATELIT</button>
+                                <button class="btn-export btn-sfx" onclick="centerMap()" style="padding:4px 8px; font-size:10px;">🎯 FOKUS LOKASI</button>
+                            </div>
+                        </div>
+                        <div class="map-container"><div id="map"></div></div>
+                    </div>
+                    <div class="content-box glass-panel">
+                        <div class="header-box">
+                            <h3>📊 GRAFIK FLUKTUASI DEBIT AIR</h3>
+                            <div id="txt-forecast" class="ai-forecast-badge" style="border-color:#ef4444; color:#ef4444;">🧠 AI PREDICTIVE MODEL ACTIVE</div>
+                        </div>
+                        <div class="chart-container"><canvas id="waterChart"></canvas></div>
+                    </div>
+                    <div class="content-box glass-panel" style="margin-bottom: 0;">
+                        <div class="header-box">
+                            <h3>📋 DATABASE TELEMETRI CLOUD & DAYA</h3>
+                            <div style="display:flex; gap:10px;">
+                                <button class="btn-export btn-sfx" onclick="switchSubMenu('logs')">🔍 BUKA TABEL PENUH</button>
+                                <button class="btn-export btn-pdf btn-sfx" onclick="generatePDF()">📄 CETAK PDF</button>
+                                <button class="btn-export btn-sfx" onclick="downloadCSV()">💾 EXPORT CSV</button>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table id="dataTable">
+                                <thead>
+                                    <tr>
+                                        <th>WAKTU</th>
+                                        <th>WATER_LVL</th>
+                                        <th>FLOW</th>
+                                        <th>TEMP</th>
+                                        <th>SOLAR (INA1)</th>
+                                        <th>BATERAI (INA2)</th>
+                                        <th>LORA</th>
+                                        <th>STATUS</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tableBody"><tr><td colspan="8" style="text-align:center;">MENUNGGU PUSH DATA...</td></tr></tbody>
+                            </table>
                         </div>
                     </div>
-                    <div class="map-container"><div id="map"></div></div>
                 </div>
-                <div class="content-box glass-panel">
-                    <div class="header-box">
-                        <h3>📊 GRAFIK FLUKTUASI DEBIT AIR</h3>
-                        <div id="txt-forecast" class="ai-forecast-badge" style="border-color:#ef4444; color:#ef4444;">🧠 AI PREDICTIVE MODEL ACTIVE</div>
+
+                <div class="right-column">
+                    <div class="content-box glass-panel">
+                        <div class="header-box" style="margin-bottom:8px; flex-wrap:wrap; gap:5px;">
+                            <h3>📷 OPTICAL SENSOR (CAM-1)</h3>
+                            <div style="display:flex; align-items:center; gap:5px; font-family:var(--font-tech); font-size:9px; color:var(--text-muted); flex-wrap:wrap;">
+                                <span class="pcb-led pcb-tx" id="led-tx"></span> TX
+                                <span class="pcb-led pcb-rx" id="led-rx"></span> RX
+                                <button class="btn-export btn-sfx" id="btn-flash" onclick="toggleFlashLED()" style="padding:3px 7px; font-size:9px; border-color:#facc15; color:#facc15;">💡 FLASH: OFF</button>
+                                <button class="btn-export btn-sfx" id="btn-fit" onclick="toggleCamFit()" style="padding:3px 6px; font-size:9px;">🖼️ FULL SENSOR</button>
+                                <button class="btn-export btn-sfx" onclick="changeCamIPPrompt()" style="padding:3px 6px; font-size:9px;">⚙️ IP</button>
+                                <button class="btn-export btn-sfx" onclick="toggleYolo()" style="padding:3px 6px; font-size:9px; border-color:#4ade80; color:#4ade80;">YOLOv10n</button>
+                                <button class="btn-export btn-sfx" onclick="toggleFullscreenCam()" style="padding:3px 6px; font-size:9px;">⛶ FULL</button>
+                            </div>
+                        </div>
+                        <div class="cctv-feed" id="cctv-feed">
+                            <img id="espcam-stream" src="http://10.78.168.1:81/stream" style="width:100%; height:100%; object-fit:contain; position:absolute; top:0; left:0; z-index:0; transition: transform 0.25s ease;" alt="ESP32-CAM Stream">
+                            
+                            <div class="cctv-overlay">
+                                <div class="cctv-badge"><span class="live-dot"></span> <span id="cam-ip-label">10.78.168.1:81</span></div>
+                                <div class="cctv-badge">ZOOM: <span id="cam-zoom-label">1.0x</span> | FLASH: <span id="cam-flash-badge">OFF</span></div>
+                            </div>
+
+                            <div style="position:absolute; bottom:12px; left:12px; z-index:10; display:flex; gap:5px; background:rgba(0,5,15,0.75); padding:6px 8px; border-radius:8px; border:1px solid rgba(14,165,233,0.4); backdrop-filter:blur(6px); align-items:center;">
+                                <button class="btn-servo btn-sfx" style="width:30px; height:30px;" onclick="adjustZoom(-0.2)" title="Zoom Out">➖</button>
+                                <button class="btn-servo btn-sfx" style="padding:0 8px; height:30px; font-size:10px; font-family:var(--font-tech);" onclick="resetZoom()" title="Reset 1.0x">1.0x</button>
+                                <button class="btn-servo btn-sfx" style="width:30px; height:30px;" onclick="adjustZoom(0.2)" title="Zoom In">➕</button>
+                                <button class="btn-servo btn-sfx" style="width:32px; height:30px; border-color:#facc15; color:#facc15;" onclick="toggleFlashLED()" title="Lampu Flash LED">💡</button>
+                            </div>
+
+                            <div class="servo-pad">
+                                <div></div>
+                                <button class="btn-servo btn-sfx" onclick="moveCam('up')" title="Atas">▲</button>
+                                <div></div>
+                                <button class="btn-servo btn-sfx" onclick="moveCam('left')" title="Kiri">◀</button>
+                                <button class="btn-servo btn-sfx" onclick="moveCam('center')" title="Tengah">●</button>
+                                <button class="btn-servo btn-sfx" onclick="moveCam('right')" title="Kanan">▶</button>
+                                <div></div>
+                                <button class="btn-servo btn-sfx" onclick="moveCam('down')" title="Bawah">▼</button>
+                                <div></div>
+                            </div>
+
+                            <div id="yolo-canvas" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:5; pointer-events:none; display:none;"></div>
+                        </div>
                     </div>
-                    <div class="chart-container"><canvas id="waterChart"></canvas></div>
+
+                    <div class="content-box glass-panel" style="border-color: var(--primary);">
+                        <div class="header-box">
+                            <h3 style="color: var(--primary);">⚡ 4-CHANNEL RELAY CONTROL & DIAGNOSTIC TEST</h3>
+                            <span style="font-size: 9px; font-family: var(--font-tech); color: var(--text-muted);">5V 4-CH RELAY</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <button id="btn-relay-ch1" class="btn-export btn-sfx" onclick="toggleRelayTest(1)" style="padding: 10px; justify-content: space-between; font-weight: bold; border-color: var(--primary);">
+                                <span>🚰 CH1: TEST POMPA</span>
+                                <span id="badge-ch1" style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">OFF</span>
+                            </button>
+                            <button id="btn-relay-ch2" class="btn-export btn-sfx" onclick="toggleRelayTest(2)" style="padding: 10px; justify-content: space-between; font-weight: bold; border-color: var(--bahaya); color: var(--bahaya);">
+                                <span>🚨 CH2: TEST ALARM</span>
+                                <span id="badge-ch2" style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">OFF</span>
+                            </button>
+                            <button id="btn-relay-ch3" class="btn-export btn-sfx" onclick="toggleRelayTest(3)" style="padding: 10px; justify-content: space-between; font-weight: bold; border-color: var(--waspada); color: var(--waspada);">
+                                <span>🟠 CH3: LAMPU WASPADA</span>
+                                <span id="badge-ch3" style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">OFF</span>
+                            </button>
+                            <button id="btn-relay-ch4" class="btn-export btn-sfx" onclick="toggleChargeMode()" style="padding: 10px; justify-content: space-between; font-weight: bold; border-color: var(--aman); color: var(--aman);">
+                                <span>⚡ CH4: SUMBER CHARGE</span>
+                                <span id="badge-ch4" style="background: rgba(16,185,129,0.2); padding: 2px 6px; border-radius: 4px;">☀️ SOLAR</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="content-box glass-panel">
+                        <div class="header-box">
+                            <h3>⚙️ BAR INDIKATOR TELEMETRI DAYA (INA219 & LORA)</h3>
+                            <button class="btn-export btn-sfx" onclick="switchSubMenu('power')" style="padding:3px 7px; font-size:9px;">📈 LIHAT GRAFIK DAYA</button>
+                        </div>
+                        <div class="diag-item"><div class="diag-label"><span>⚠️ RISIKO LIMPASAN</span><span id="txt-risiko">0%</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-risiko" style="width: 0%; background: var(--aman);"></div></div></div>
+                        <div class="diag-item"><div class="diag-label"><span>☀️ SOLAR PANEL (INA219 #1)</span><span id="txt-solar">0.00 V | 0 mA</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-solar" style="width: 0%; background: var(--waspada);"></div></div></div>
+                        <div class="diag-item"><div class="diag-label"><span>🔋 BATERAI / AKI (INA219 #2)</span><span id="txt-batt">0.00 V | 0 mA (92%)</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-batt" style="width: 92%; background: var(--aman);"></div></div></div>
+                        <div class="diag-item"><div class="diag-label"><span>📡 SINYAL LORA RA-02 (RSSI)</span><span id="txt-lora">-78 dBm</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-lora" style="width: 75%; background: var(--primary);"></div></div></div>
+                    </div>
+
+                    <div class="content-box glass-panel" style="border-color: var(--primary); box-shadow: inset 0 0 20px rgba(14, 165, 233, 0.1);">
+                        <div class="header-box" style="border-bottom-color: rgba(14, 165, 233, 0.3);">
+                            <h3 style="color: var(--primary); text-shadow: 0 0 5px var(--primary);">🚰 PUMP & FLOWMETER (YF-S201)</h3>
+                        </div>
+                        <div class="pump-card" style="position: relative;">
+                            <div class="pump-icon" id="pump-icon">⚙️</div>
+                            <div style="flex-grow: 1;">
+                                <div style="font-size: 9px; color: var(--primary); text-transform: uppercase;">MODBUS RELAY STATUS</div>
+                                <div id="pump-status-text" style="font-size: 14px; font-weight: bold; color: var(--text-muted); font-family: var(--font-tech); margin-bottom:5px;">STANDBY</div>
+                                <div class="coriolis-data">
+                                    <div><span style="color:#64748b;">FLOW:</span> <span id="yf-flowrate" style="color:var(--primary);">0.00</span> L/min</div>
+                                    <div><span style="color:#64748b;">MASS:</span> <span id="coriolis-mass">0.00</span> kg/s</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flow-indicator"><div class="flow-bar" id="flow-bar"></div></div>
+                    </div>
+
+                    <div class="content-box glass-panel" style="border-color: var(--bahaya);">
+                        <div class="header-box" style="border-bottom-color: rgba(239, 68, 68, 0.3);"><h3 style="color: var(--bahaya);">📞 KONTAK SOS DARURAT</h3></div>
+                        <div class="sos-grid">
+                            <a href="tel:112" class="btn-sos btn-sfx" style="background-color: #ef4444;"><span style="font-size:14px;">🚒</span><span>DAMKAR (112)</span></a>
+                            <a href="tel:119" class="btn-sos btn-sfx" style="background-color: #f59e0b;"><span style="font-size:14px;">🚑</span><span>AMBULANS (119)</span></a>
+                            <a href="#" class="btn-sos full btn-sfx" style="background-color: #10b981;"><span style="font-size:14px;">🏥</span><span>POSKO KEL. KAMAL</span></a>
+                        </div>
+                    </div>
+
+                    <div class="content-box glass-panel" style="margin-bottom: 0;">
+                        <div class="header-box"><h3>💻 CLOUD TERMINAL (ROOT)</h3></div>
+                        <div class="terminal-box">
+                            <div id="terminalLog"><div class="terminal-line"><span style="color:#64748b;">[INIT]</span> <span style="color:var(--text-main);">A.E.G.I.S Firebase SDK Booting... OK</span></div></div>
+                            <div class="terminal-input-wrapper"><span style="color:#0ea5e9;">cloud@aegis:~#</span><input type="text" id="cmd-input" class="terminal-input" placeholder="Ketik 'pump on', 'alarm on', 'mode solar', 'mode adaptor'..." autocomplete="off" spellcheck="false"></div>
+                        </div>
+                    </div>
                 </div>
+            </div>
+
+            <!-- ======================================================================= -->
+            <!-- SUB-MENU 2: TELEMETRI DAYA, GRAFIK INA219 & OTOMATISASI ATS (< 7V)      -->
+            <!-- ======================================================================= -->
+            <div id="view-power" class="grand-layout" style="display: none;">
+                <div class="left-column">
+                    <div class="content-box glass-panel">
+                        <div class="header-box">
+                            <h3>📈 GRAFIK RIWAYAT TEGANGAN: SOLAR PANEL vs BATERAI / AKI (VOLT)</h3>
+                            <span class="ai-forecast-badge" style="border-color:var(--bahaya); color:var(--bahaya);">⚠️ CUTOVER THRESHOLD: 7.0V</span>
+                        </div>
+                        <div class="chart-container" style="height: 290px;"><canvas id="powerVoltageChart"></canvas></div>
+                    </div>
+
+                    <div class="content-box glass-panel" style="margin-bottom: 0;">
+                        <div class="header-box">
+                            <h3>⚡ GRAFIK RIWAYAT ARUS PENGISIAN & BEBAN (mA)</h3>
+                            <span style="font-size:10px; font-family:var(--font-tech); color:var(--primary);">DUAL INA219 I2C TELEMETRY (0x40 & 0x41)</span>
+                        </div>
+                        <div class="chart-container" style="height: 260px;"><canvas id="powerCurrentChart"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="right-column">
+                    <div class="content-box glass-panel" style="border-color: var(--aman);">
+                        <div class="header-box">
+                            <h3 style="color: var(--aman);">🤖 SMART ATS (AUTOMATIC TRANSFER SWITCH - CH4)</h3>
+                            <span id="ats-status-badge" class="badge bg-aman">AUTO CUTOVER AKTIF</span>
+                        </div>
+                        <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-top: 0;">
+                            Sistem memantau tegangan <b>Baterai / Aki (INA219 #2)</b> secara <i>real-time</i>. Jika tegangan turun di bawah <b><span id="lbl-ats-threshold" style="color:var(--bahaya);">7.0</span> V</b>, Relay <b>CH4 (GPIO 15)</b> otomatis memindahkan jalur pengisian ke <b>🔌 ADAPTOR DC</b>.
+                        </p>
+
+                        <div class="ats-info-grid">
+                            <div class="ats-metric-box">
+                                <span class="ats-label">TEGANGAN AKI SAAT INI</span>
+                                <span id="ats-curr-batt" class="ats-val" style="color:var(--aman);">0.00 V</span>
+                            </div>
+                            <div class="ats-metric-box">
+                                <span class="ats-label">BATAS CUTOVER ADAPTOR</span>
+                                <span class="ats-val" style="color:var(--bahaya);">&lt; 7.00 V</span>
+                            </div>
+                            <div class="ats-metric-box">
+                                <span class="ats-label">SUMBER AKTIF (CH4)</span>
+                                <span id="ats-curr-source" class="ats-val" style="color:var(--primary);">☀️ SOLAR</span>
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
+                            <button id="btn-ats-auto" class="btn-export btn-sfx" onclick="setATSMode(true)" style="padding: 12px; justify-content: center; font-weight: bold; background: var(--aman); color: #000; border-color: var(--aman);">
+                                🤖 MODE AUTO ATS (&lt; 7V)
+                            </button>
+                            <button id="btn-ats-manual" class="btn-export btn-sfx" onclick="setATSMode(false)" style="padding: 12px; justify-content: center; font-weight: bold;">
+                                🖐️ MODE MANUAL OVERRIDE
+                            </button>
+                        </div>
+
+                        <div style="margin-top: 15px; padding-top: 12px; border-top: 1px dashed var(--glass-border);">
+                            <div style="font-size: 10px; font-family: var(--font-tech); color: var(--text-muted); margin-bottom: 8px;">🧪 PENGUJIAN & SIMULASI OTOMATISASI ATS (&lt; 7V):</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                <button class="btn-export btn-sfx" onclick="simulateBatteryVoltage(6.2)" style="padding: 10px; justify-content: center; border-color: var(--bahaya); color: var(--bahaya); font-weight: bold;">
+                                    📉 UJI AKI DROP (6.2V ➔ ADAPTOR)
+                                </button>
+                                <button class="btn-export btn-sfx" onclick="simulateBatteryVoltage(12.4)" style="padding: 10px; justify-content: center; border-color: var(--aman); color: var(--aman); font-weight: bold;">
+                                    📈 UJI AKI PULIH (12.4V ➔ SOLAR)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="content-box glass-panel" style="margin-bottom: 0;">
+                        <div class="header-box">
+                            <h3>🔋 DETAIL TELEMETRI MODUL DUAL INA219</h3>
+                        </div>
+                        <div class="ats-info-grid" style="grid-template-columns: 1fr 1fr;">
+                            <div class="ats-metric-box" style="border-color: rgba(245, 158, 11, 0.4);">
+                                <span class="ats-label" style="color:var(--waspada);">☀️ INA219 #1 (SOLAR - 0x40)</span>
+                                <div style="font-family:var(--font-tech); font-size:13px; margin-top:6px; line-height:1.7;">
+                                    Tegangan : <b id="det-solar-v" style="color:#facc15;">0.00 V</b><br>
+                                    Arus     : <b id="det-solar-i">0 mA</b><br>
+                                    Daya     : <b id="det-solar-p">0 mW</b>
+                                </div>
+                            </div>
+                            <div class="ats-metric-box" style="border-color: rgba(16, 185, 129, 0.4);">
+                                <span class="ats-label" style="color:var(--aman);">🔋 INA219 #2 (AKI - 0x41)</span>
+                                <div style="font-family:var(--font-tech); font-size:13px; margin-top:6px; line-height:1.7;">
+                                    Tegangan : <b id="det-batt-v" style="color:var(--aman);">0.00 V</b><br>
+                                    Arus     : <b id="det-batt-i">0 mA</b><br>
+                                    Kapasitas: <b id="det-batt-pct">92%</b>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ======================================================================= -->
+            <!-- SUB-MENU 3: DATABASE RIWAYAT & LAPORAN LENGKAP                          -->
+            <!-- ======================================================================= -->
+            <div id="view-logs" style="display: none;">
                 <div class="content-box glass-panel" style="margin-bottom: 0;">
                     <div class="header-box">
-                        <h3>📋 DATABASE TELEMETRI CLOUD & DAYA</h3>
+                        <h3>📋 LOGS RIWAYAT TELEMETRI LENGKAP (FLOOD, FLOW, SOLAR, BATERAI, LORA, ATS)</h3>
                         <div style="display:flex; gap:10px;">
                             <button class="btn-export btn-pdf btn-sfx" onclick="generatePDF()">📄 CETAK PDF</button>
-                            <button class="btn-export btn-sfx" onclick="downloadCSV()">💾 EXPORT CSV</button>
+                            <button class="btn-export btn-sfx" onclick="downloadCSV()">💾 EXPORT CSV LENGKAP</button>
                         </div>
                     </div>
-                    <div class="table-container">
-                        <table id="dataTable">
+                    <div class="table-container" style="max-height: 520px;">
+                        <table>
                             <thead>
                                 <tr>
                                     <th>WAKTU</th>
-                                    <th>WATER_LVL</th>
-                                    <th>FLOW</th>
-                                    <th>TEMP</th>
+                                    <th>NODE_ID</th>
+                                    <th>TINGGI BANJIR</th>
+                                    <th>JARAK SENSOR</th>
+                                    <th>FLOW METER</th>
+                                    <th>SUHU</th>
                                     <th>SOLAR (INA1)</th>
-                                    <th>BATERAI (INA2)</th>
-                                    <th>LORA</th>
+                                    <th>BATERAI / AKI (INA2)</th>
+                                    <th>MODE CHARGE (CH4)</th>
+                                    <th>LORA RSSI</th>
                                     <th>STATUS</th>
                                 </tr>
                             </thead>
-                            <tbody id="tableBody"><tr><td colspan="8" style="text-align:center;">MENUNGGU PUSH DATA...</td></tr></tbody>
+                            <tbody id="fullTableBody"><tr><td colspan="11" style="text-align:center;">MENUNGGU PUSH DATA...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
-            <div class="right-column">
-                <div class="content-box glass-panel">
-                    <div class="header-box" style="margin-bottom:8px; flex-wrap:wrap; gap:5px;">
-                        <h3>📷 OPTICAL SENSOR (CAM-1)</h3>
-                        <div style="display:flex; align-items:center; gap:5px; font-family:var(--font-tech); font-size:9px; color:var(--text-muted); flex-wrap:wrap;">
-                            <span class="pcb-led pcb-tx" id="led-tx"></span> TX
-                            <span class="pcb-led pcb-rx" id="led-rx"></span> RX
-                            <button class="btn-export btn-sfx" id="btn-flash" onclick="toggleFlashLED()" style="padding:3px 7px; font-size:9px; border-color:#facc15; color:#facc15;">💡 FLASH: OFF</button>
-                            <button class="btn-export btn-sfx" id="btn-fit" onclick="toggleCamFit()" style="padding:3px 6px; font-size:9px;">🖼️ FULL SENSOR</button>
-                            <button class="btn-export btn-sfx" onclick="changeCamIPPrompt()" style="padding:3px 6px; font-size:9px;">⚙️ IP</button>
-                            <button class="btn-export btn-sfx" onclick="toggleYolo()" style="padding:3px 6px; font-size:9px; border-color:#4ade80; color:#4ade80;">YOLOv10n</button>
-                            <button class="btn-export btn-sfx" onclick="toggleFullscreenCam()" style="padding:3px 6px; font-size:9px;">⛶ FULL</button>
-                        </div>
-                    </div>
-                    <div class="cctv-feed" id="cctv-feed">
-                        <img id="espcam-stream" src="http://10.78.168.1:81/stream" style="width:100%; height:100%; object-fit:contain; position:absolute; top:0; left:0; z-index:0; transition: transform 0.25s ease;" alt="ESP32-CAM Stream">
-                        
-                        <div class="cctv-overlay">
-                            <div class="cctv-badge"><span class="live-dot"></span> <span id="cam-ip-label">10.78.168.1:81</span></div>
-                            <div class="cctv-badge">ZOOM: <span id="cam-zoom-label">1.0x</span> | FLASH: <span id="cam-flash-badge">OFF</span></div>
-                        </div>
-
-                        <div style="position:absolute; bottom:12px; left:12px; z-index:10; display:flex; gap:5px; background:rgba(0,5,15,0.75); padding:6px 8px; border-radius:8px; border:1px solid rgba(14,165,233,0.4); backdrop-filter:blur(6px); align-items:center;">
-                            <button class="btn-servo btn-sfx" style="width:30px; height:30px;" onclick="adjustZoom(-0.2)" title="Zoom Out">➖</button>
-                            <button class="btn-servo btn-sfx" style="padding:0 8px; height:30px; font-size:10px; font-family:var(--font-tech);" onclick="resetZoom()" title="Reset 1.0x">1.0x</button>
-                            <button class="btn-servo btn-sfx" style="width:30px; height:30px;" onclick="adjustZoom(0.2)" title="Zoom In">➕</button>
-                            <button class="btn-servo btn-sfx" style="width:32px; height:30px; border-color:#facc15; color:#facc15;" onclick="toggleFlashLED()" title="Lampu Flash LED">💡</button>
-                        </div>
-
-                        <div class="servo-pad">
-                            <div></div>
-                            <button class="btn-servo btn-sfx" onclick="moveCam('up')" title="Atas">▲</button>
-                            <div></div>
-                            <button class="btn-servo btn-sfx" onclick="moveCam('left')" title="Kiri">◀</button>
-                            <button class="btn-servo btn-sfx" onclick="moveCam('center')" title="Tengah">●</button>
-                            <button class="btn-servo btn-sfx" onclick="moveCam('right')" title="Kanan">▶</button>
-                            <div></div>
-                            <button class="btn-servo btn-sfx" onclick="moveCam('down')" title="Bawah">▼</button>
-                            <div></div>
-                        </div>
-
-                        <div id="yolo-canvas" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:5; pointer-events:none; display:none;"></div>
-                    </div>
-                </div>
-
-                <!-- PANEL KONTROL & TEST MODUL RELAY 4-CHANNEL -->
-                <div class="content-box glass-panel" style="border-color: var(--primary);">
-                    <div class="header-box">
-                        <h3 style="color: var(--primary);">⚡ 4-CHANNEL RELAY CONTROL & DIAGNOSTIC TEST</h3>
-                        <span style="font-size: 9px; font-family: var(--font-tech); color: var(--text-muted);">5V 4-CH RELAY</span>
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                        <button id="btn-relay-ch1" class="btn-export btn-sfx" onclick="toggleRelayTest(1)" style="padding: 10px; justify-content: space-between; font-weight: bold; border-color: var(--primary);">
-                            <span>🚰 CH1: TEST POMPA</span>
-                            <span id="badge-ch1" style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">OFF</span>
-                        </button>
-                        <button id="btn-relay-ch2" class="btn-export btn-sfx" onclick="toggleRelayTest(2)" style="padding: 10px; justify-content: space-between; font-weight: bold; border-color: var(--bahaya); color: var(--bahaya);">
-                            <span>🚨 CH2: TEST ALARM</span>
-                            <span id="badge-ch2" style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">OFF</span>
-                        </button>
-                        <button id="btn-relay-ch3" class="btn-export btn-sfx" onclick="toggleRelayTest(3)" style="padding: 10px; justify-content: space-between; font-weight: bold; border-color: var(--waspada); color: var(--waspada);">
-                            <span>🟠 CH3: LAMPU WASPADA</span>
-                            <span id="badge-ch3" style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">OFF</span>
-                        </button>
-                        <button id="btn-relay-ch4" class="btn-export btn-sfx" onclick="toggleChargeMode()" style="padding: 10px; justify-content: space-between; font-weight: bold; border-color: var(--aman); color: var(--aman);">
-                            <span>⚡ CH4: SUMBER CHARGE</span>
-                            <span id="badge-ch4" style="background: rgba(16,185,129,0.2); padding: 2px 6px; border-radius: 4px;">☀️ SOLAR</span>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="content-box glass-panel">
-                    <div class="header-box"><h3>⚙️ BAR INDIKATOR TELEMETRI DAYA (INA219 & LORA)</h3></div>
-                    <div class="diag-item"><div class="diag-label"><span>⚠️ RISIKO LIMPASAN</span><span id="txt-risiko">0%</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-risiko" style="width: 0%; background: var(--aman);"></div></div></div>
-                    <div class="diag-item"><div class="diag-label"><span>☀️ SOLAR PANEL (INA219 #1)</span><span id="txt-solar">0.00 V | 0 mA</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-solar" style="width: 0%; background: var(--waspada);"></div></div></div>
-                    <div class="diag-item"><div class="diag-label"><span>🔋 BATERAI / AKI (INA219 #2)</span><span id="txt-batt">0.00 V | 0 mA (92%)</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-batt" style="width: 92%; background: var(--aman);"></div></div></div>
-                    <div class="diag-item"><div class="diag-label"><span>📡 SINYAL LORA RA-02 (RSSI)</span><span id="txt-lora">-78 dBm</span></div><div class="diag-bar-bg"><div class="diag-bar-fill" id="bar-lora" style="width: 75%; background: var(--primary);"></div></div></div>
-                </div>
-
-                <div class="content-box glass-panel" style="border-color: var(--primary); box-shadow: inset 0 0 20px rgba(14, 165, 233, 0.1);">
-                    <div class="header-box" style="border-bottom-color: rgba(14, 165, 233, 0.3);">
-                        <h3 style="color: var(--primary); text-shadow: 0 0 5px var(--primary);">🚰 PUMP & FLOWMETER (YF-S201)</h3>
-                    </div>
-                    <div class="pump-card" style="position: relative;">
-                        <div class="pump-icon" id="pump-icon">⚙️</div>
-                        <div style="flex-grow: 1;">
-                            <div style="font-size: 9px; color: var(--primary); text-transform: uppercase;">MODBUS RELAY STATUS</div>
-                            <div id="pump-status-text" style="font-size: 14px; font-weight: bold; color: var(--text-muted); font-family: var(--font-tech); margin-bottom:5px;">STANDBY</div>
-                            <div class="coriolis-data">
-                                <div><span style="color:#64748b;">FLOW:</span> <span id="yf-flowrate" style="color:var(--primary);">0.00</span> L/min</div>
-                                <div><span style="color:#64748b;">MASS:</span> <span id="coriolis-mass">0.00</span> kg/s</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="flow-indicator"><div class="flow-bar" id="flow-bar"></div></div>
-                </div>
-
-                <div class="content-box glass-panel" style="border-color: var(--bahaya);">
-                    <div class="header-box" style="border-bottom-color: rgba(239, 68, 68, 0.3);"><h3 style="color: var(--bahaya);">📞 KONTAK SOS DARURAT</h3></div>
-                    <div class="sos-grid">
-                        <a href="tel:112" class="btn-sos btn-sfx" style="background-color: #ef4444;"><span style="font-size:14px;">🚒</span><span>DAMKAR (112)</span></a>
-                        <a href="tel:119" class="btn-sos btn-sfx" style="background-color: #f59e0b;"><span style="font-size:14px;">🚑</span><span>AMBULANS (119)</span></a>
-                        <a href="#" class="btn-sos full btn-sfx" style="background-color: #10b981;"><span style="font-size:14px;">🏥</span><span>POSKO KEL. KAMAL</span></a>
-                    </div>
-                </div>
-
-                <div class="content-box glass-panel" style="margin-bottom: 0;">
-                    <div class="header-box"><h3>💻 CLOUD TERMINAL (ROOT)</h3></div>
-                    <div class="terminal-box">
-                        <div id="terminalLog"><div class="terminal-line"><span style="color:#64748b;">[INIT]</span> <span style="color:var(--text-main);">A.E.G.I.S Firebase SDK Booting... OK</span></div></div>
-                        <div class="terminal-input-wrapper"><span style="color:#0ea5e9;">cloud@aegis:~#</span><input type="text" id="cmd-input" class="terminal-input" placeholder="Ketik 'pump on', 'alarm on', 'mode solar', 'mode adaptor'..." autocomplete="off" spellcheck="false"></div>
-                    </div>
-                </div>
-            </div>
         </div>
     </div> 
-    <script src="./main.js?v=godtier6"></script>
+    <script src="./main.js?v=godtier7"></script>
 </body>
 </html>
