@@ -21,12 +21,102 @@ let cloudPanAngle  = 90;
 let cloudTiltAngle = 90;
 const SERVO_STEP   = 15;
 
-// Status Memori 4-Channel Relay
+// Status 4-Channel Relay & Smart ATS (< 7.0V -> Adaptor)
 let relayCH1_Pump   = false;
 let relayCH2_Alarm  = false;
 let relayCH3_Lamp   = false;
 let relayCH4_Charge = "SOLAR";
+let isAutoATS       = true;     // Default: Otomatis pindah ke Adaptor jika Aki < 7.0V
+const ATS_CUTOVER_V = 7.0;      // Batas tegangan kritis Aki (7.0 Volt)
+const ATS_RECOVER_V = 8.0;      // Batas tegangan pulih Aki (8.0 Volt)
 let testAlarmLoop   = null;
+
+// ================= FUNGSI PINDAH SUB-MENU (OVERVIEW / POWER / LOGS) =================
+window.switchSubMenu = function(menuName) {
+    document.getElementById('view-overview').style.display = (menuName === 'overview') ? 'grid' : 'none';
+    document.getElementById('view-power').style.display    = (menuName === 'power')    ? 'grid' : 'none';
+    document.getElementById('view-logs').style.display     = (menuName === 'logs')     ? 'block' : 'none';
+
+    document.getElementById('tab-btn-overview').classList.toggle('active', menuName === 'overview');
+    document.getElementById('tab-btn-power').classList.toggle('active', menuName === 'power');
+    document.getElementById('tab-btn-logs').classList.toggle('active', menuName === 'logs');
+
+    if (menuName === 'overview' && map) {
+        setTimeout(() => { map.invalidateSize(); }, 200);
+    }
+    if (menuName === 'power' && powerVoltageChart && powerCurrentChart) {
+        setTimeout(() => {
+            powerVoltageChart.resize();
+            powerVoltageChart.update();
+            powerCurrentChart.resize();
+            powerCurrentChart.update();
+        }, 150);
+    }
+};
+
+// ================= FUNGSI OTOMATISASI SMART ATS (< 7V -> ADAPTOR) =================
+window.setATSMode = function(enableAuto) {
+    isAutoATS = enableAuto;
+    let modeStr = isAutoATS ? "AUTO" : "MANUAL";
+    database.ref('kontrol').update({ ats_mode: modeStr });
+
+    const btnAuto   = document.getElementById('btn-ats-auto');
+    const btnManual = document.getElementById('btn-ats-manual');
+    const badgeATS  = document.getElementById('ats-status-badge');
+    const topATS    = document.getElementById('top-ats-stat');
+
+    if (btnAuto && btnManual) {
+        btnAuto.style.background   = isAutoATS ? 'var(--aman)' : 'transparent';
+        btnAuto.style.color        = isAutoATS ? '#000' : 'var(--primary)';
+        btnManual.style.background = !isAutoATS ? 'var(--waspada)' : 'transparent';
+        btnManual.style.color      = !isAutoATS ? '#000' : 'var(--primary)';
+    }
+    if (badgeATS) {
+        badgeATS.innerText = isAutoATS ? 'AUTO CUTOVER (<7V)' : 'MANUAL OVERRIDE';
+        badgeATS.className = isAutoATS ? 'badge bg-aman' : 'badge bg-waspada';
+    }
+    if (topATS) {
+        topATS.innerText   = modeStr;
+        topATS.style.color = isAutoATS ? 'var(--aman)' : 'var(--waspada)';
+    }
+    addLog('PWR', `🤖 Smart ATS diatur ke mode: ${modeStr}`);
+};
+
+// Simulasi Uji Tegangan Aki (< 7V atau Normal) langsung ke Cloud & Grafik
+window.simulateBatteryVoltage = function(simBattV) {
+    let lastLog = globalHistory.length > 0 ? globalHistory[globalHistory.length - 1] : {};
+    let timeStr = new Date().toLocaleTimeString('id-ID', { hour12: false });
+    let sV      = Number(lastLog.solar_v ?? 14.2);
+    let sI      = Number(lastLog.solar_i ?? 320);
+    let bI      = simBattV < 7.0 ? 450 : 210;
+    let bPct    = Math.max(0, Math.min(100, Math.round(((simBattV - 6.0) / (12.8 - 6.0)) * 100)));
+    let newChg  = (simBattV < ATS_CUTOVER_V) ? "ADAPTOR" : "SOLAR";
+
+    if (isAutoATS) {
+        toggleChargeMode(newChg);
+    }
+
+    database.ref('sensor/logs').push({
+        device_id: "NODE-KALIDERES-01",
+        timestamp: timeStr,
+        status: currentStatus,
+        water_level: currentWaterLevel,
+        distance_cm: Math.max(0, 150 - currentWaterLevel),
+        temperature: Number(lastLog.temperature ?? 28.5),
+        flow_rate_lpm: Number(lastLog.flow_rate_lpm ?? 0),
+        mass_flow_kgs: Number(lastLog.mass_flow_kgs ?? 0),
+        solar_v: sV,
+        solar_i: sI,
+        solar_p: Math.round(sV * sI),
+        batt_v: simBattV,
+        batt_i: bI,
+        batt_p: Math.round(simBattV * bI),
+        batt_pct: bPct,
+        lora_rssi: Number(lastLog.lora_rssi ?? -75),
+        charge_mode: newChg
+    });
+    addLog('PWR', `🧪 Simulasi Tegangan Aki: ${simBattV.toFixed(2)}V -> Mode Charge: ${newChg}`);
+};
 
 window.moveCam = function(direction) {
     if (direction === 'left')   cloudPanAngle  = Math.min(180, cloudPanAngle + SERVO_STEP);
@@ -58,7 +148,6 @@ window.moveCam = function(direction) {
 
 // ================= FUNGSI KONTROL & TEST 4-CHANNEL RELAY =================
 function updateRelayButtonsUI() {
-    // CH1: Pompa Air
     const btn1 = document.getElementById('btn-relay-ch1');
     const bdg1 = document.getElementById('badge-ch1');
     const topPump = document.getElementById('top-pump-stat');
@@ -69,18 +158,14 @@ function updateRelayButtonsUI() {
     }
     if (topPump) topPump.innerText = relayCH1_Pump ? "ON" : "OFF";
 
-    // CH2: Alarm Sirine
     const btn2 = document.getElementById('btn-relay-ch2');
     const bdg2 = document.getElementById('badge-ch2');
-    const topAlarm = document.getElementById('top-alarm-stat');
     if (btn2 && bdg2) {
         bdg2.innerText = relayCH2_Alarm ? "ON" : "OFF";
         btn2.style.background = relayCH2_Alarm ? "var(--bahaya)" : "transparent";
         btn2.style.color      = relayCH2_Alarm ? "#fff" : "var(--bahaya)";
     }
-    if (topAlarm) topAlarm.innerText = relayCH2_Alarm ? "ON" : "OFF";
 
-    // CH3: Lampu Waspada Orange
     const btn3 = document.getElementById('btn-relay-ch3');
     const bdg3 = document.getElementById('badge-ch3');
     if (btn3 && bdg3) {
@@ -89,10 +174,10 @@ function updateRelayButtonsUI() {
         btn3.style.color      = relayCH3_Lamp ? "#000" : "var(--waspada)";
     }
 
-    // CH4: Mode Charging (Solar Panel vs Adaptor)
     const btn4 = document.getElementById('btn-relay-ch4');
     const bdg4 = document.getElementById('badge-ch4');
     const topChg = document.getElementById('top-charge-mode');
+    const atsSrc = document.getElementById('ats-curr-source');
     if (btn4 && bdg4) {
         if (relayCH4_Charge === "ADAPTOR") {
             bdg4.innerText = "🔌 ADAPTOR";
@@ -100,12 +185,14 @@ function updateRelayButtonsUI() {
             btn4.style.color       = "#fff";
             btn4.style.background  = "rgba(168, 85, 247, 0.35)";
             if (topChg) { topChg.innerText = "🔌 ADAPTOR DC"; topChg.style.color = "#a855f7"; }
+            if (atsSrc) { atsSrc.innerText = "🔌 ADAPTOR"; atsSrc.style.color = "#a855f7"; }
         } else {
             bdg4.innerText = "☀️ SOLAR";
             btn4.style.borderColor = "var(--aman)";
             btn4.style.color       = "var(--aman)";
             btn4.style.background  = "transparent";
             if (topChg) { topChg.innerText = "☀️ SOLAR PANEL"; topChg.style.color = "var(--aman)"; }
+            if (atsSrc) { atsSrc.innerText = "☀️ SOLAR"; atsSrc.style.color = "var(--aman)"; }
         }
     }
 }
@@ -150,11 +237,12 @@ window.toggleChargeMode = function(forceMode = null) {
     if (forceMode) {
         relayCH4_Charge = forceMode;
     } else {
+        // Jika diklik manual oleh pengguna, ubah sumber charge
         relayCH4_Charge = (relayCH4_Charge === "SOLAR") ? "ADAPTOR" : "SOLAR";
     }
     database.ref('kontrol').update({ charge_mode: relayCH4_Charge });
     if (ESPMAIN_IP !== "") fetch(`${ESPMAIN_IP}/relay?ch=4&val=${relayCH4_Charge}`).catch(() => {});
-    addLog('PWR', `⚡ CH4 Sumber Pengisian diubah ke: MODE ${relayCH4_Charge}`);
+    addLog('PWR', `⚡ CH4 Sumber Pengisian diatur ke: MODE ${relayCH4_Charge}`);
     updateRelayButtonsUI();
 };
 
@@ -231,6 +319,7 @@ let currentWaterLevel = 0; let currentStatus = "AMAN"; let previousStatus = null
 let isPumpActive = false; let isEvacActive = false; let alarmPlaying = false;
 let systemBooted = false; let globalHistory = []; window.lastTimestamp = null;
 let iconAman, iconWaspada, iconBahaya;
+var map, waterChart, powerVoltageChart, powerCurrentChart, routingControl, ctx;
 
 // ==========================================
 // TECHNICAL ART: CFD FLUID DYNAMICS 
@@ -328,7 +417,7 @@ function verifyLogin() {
 function startBootSequence() {
     document.getElementById('boot-screen').style.visibility = 'visible'; document.getElementById('boot-screen').style.opacity = '1';
     const bootLog = document.getElementById('boot-log');
-    const messages = [ "> MENGHUBUNGKAN KE FIREBASE WEBSOCKET...", "> MENGKALIBRASI MODUL RELAY 4-CHANNEL & INA219...", "> MENGAKTIFKAN STREAMING ESP32-CAM & SERVO...", "> SISTEM A.E.G.I.S CLOUD SIAP." ];
+    const messages = [ "> MENGHUBUNGKAN KE FIREBASE WEBSOCKET...", "> MENGKALIBRASI DUAL INA219 & SMART ATS (<7V)...", "> MENGAKTIFKAN STREAMING ESP32-CAM & SERVO...", "> SISTEM A.E.G.I.S CLOUD SIAP." ];
     let i = 0;
     let bootInterval = setInterval(() => {
         if(i < messages.length) { bootLog.innerHTML += messages[i] + "<br>"; playBeep(400 + (i*100), 'square', 0.05, 0.02); i++; } 
@@ -357,13 +446,13 @@ function startBootSequence() {
 }
 
 // ==========================================
-// REAL MAP ENGINE (SATELLITE & OPENSTREETMAP)
+// REAL MAP & CHARTS ENGINE (WATER + SOLAR/BATTERY INA219)
 // ==========================================
 let isLightMode = false;
 let isSatelliteMode = true;
 var mapTilesSatellite = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 var mapTilesStreet    = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-var currentTileLayer; var map, waterChart, routingControl, ctx;
+var currentTileLayer;
 
 let markerUtama, markerHulu, markerHilir, markerPosko;
 const KALIDERES_LAT = -6.1044; const KALIDERES_LNG = 106.7022; 
@@ -398,6 +487,8 @@ function toggleTheme() {
     if(isLightMode) { btn.innerHTML = '🌙 GELAP'; Chart.defaults.color = '#64748b'; Chart.defaults.borderColor = 'rgba(0,0,0,0.1)'; } 
     else { btn.innerHTML = '🌞 TERANG'; Chart.defaults.color = '#94a3b8'; Chart.defaults.borderColor = 'rgba(14,165,233,0.1)'; }
     waterChart.update();
+    if (powerVoltageChart) powerVoltageChart.update();
+    if (powerCurrentChart) powerCurrentChart.update();
 }
 
 // AI ASSISTANT NLP
@@ -416,7 +507,7 @@ if(recognition) {
         else if(perintah.includes('solar')) jawaban = `Tegangan panel surya saat ini ${document.getElementById('top-solar-v').innerText} volt dengan arus ${document.getElementById('top-solar-i').innerText} miliampere.`;
         else if(perintah.includes('baterai') || perintah.includes('aki')) jawaban = `Status daya baterai ${document.getElementById('txt-batt').innerText}. Mode pengisian menggunakan ${relayCH4_Charge}.`;
         else if(perintah.includes('sinyal') || perintah.includes('lora')) jawaban = `Kekuatan sinyal LoRa terpantau pada ${document.getElementById('txt-lora').innerText}.`;
-        else if(perintah.includes('laporan') || perintah.includes('sistem')) jawaban = `Diagnosis penuh: Air ${currentWaterLevel} senti, Suhu ${document.getElementById('teks-suhu').innerText} derajat, Baterai ${document.getElementById('top-batt-v').innerText} volt. Seluruh instrumen beroperasi normal.`;
+        else if(perintah.includes('laporan') || perintah.includes('sistem')) jawaban = `Diagnosis penuh: Air ${currentWaterLevel} senti, Suhu ${document.getElementById('teks-suhu').innerText} derajat, Baterai ${document.getElementById('top-batt-v').innerText} volt.`;
         addLog('AI', `Out: "${jawaban}"`); let msg = new SpeechSynthesisUtterance(jawaban); msg.lang = 'id-ID'; msg.pitch = 1.1; msg.rate = 0.95; window.speechSynthesis.speak(msg); recognition.stop();
     };
     recognition.onstart = function() { aiTimeout = setTimeout(() => { if(aiListening) { addLog('AI', 'Membatalkan sesi dengar (Timeout).'); toggleVoiceAI(true); } }, 6000); };
@@ -453,7 +544,8 @@ setInterval(() => { const now = new Date(); document.getElementById('teks-jam').
 // TERMINAL COMMANDS
 // ==========================================
 function addLog(tipe, pesan) {
-    let term = document.getElementById('terminalLog'); let time = new Date().toLocaleTimeString('id-ID', { hour12: false }); 
+    let term = document.getElementById('terminalLog'); if (!term) return;
+    let time = new Date().toLocaleTimeString('id-ID', { hour12: false }); 
     let clr = tipe === 'ERR' ? '#ef4444' : (tipe === 'AI' ? '#a855f7' : (tipe==='NET' ? '#10b981' : (tipe==='CMD' ? '#facc15' : '#0ea5e9')));
     term.innerHTML += `<div class="terminal-line"><span style="color:#64748b; width:65px;">${time}</span> <span style="color:${clr}; font-weight:bold; width:50px;">[${tipe}]</span> <span style="color:var(--text-main);">${pesan}</span></div>`; term.scrollTop = term.scrollHeight;
 }
@@ -475,6 +567,10 @@ document.getElementById('cmd-input').addEventListener('keypress', function(e) {
             toggleChargeMode('SOLAR');
         } else if (cmd === 'mode adaptor') { 
             toggleChargeMode('ADAPTOR');
+        } else if (cmd === 'ats auto') {
+            setATSMode(true);
+        } else if (cmd === 'ats manual') {
+            setATSMode(false);
         } else if (cmd === 'flash on') {
             toggleFlashLED('flash_on');
         } else if (cmd === 'flash off') {
@@ -534,20 +630,66 @@ function initMapsAndCharts() {
 
     setTimeout(() => { map.invalidateSize(); }, 300);
 
-    Chart.defaults.color = '#64748b'; Chart.defaults.borderColor = 'rgba(14,165,233,0.1)'; Chart.defaults.font.family = "'Courier New', Courier, monospace";
+    Chart.defaults.color = '#94a3b8'; Chart.defaults.borderColor = 'rgba(14,165,233,0.1)'; Chart.defaults.font.family = "'Courier New', Courier, monospace";
+    
+    // 1. Grafik Fluktuasi Debit Air
     ctx = document.getElementById('waterChart').getContext('2d');
     var grad = ctx.createLinearGradient(0, 0, 0, 250); grad.addColorStop(0, 'rgba(14, 165, 233, 0.4)'); grad.addColorStop(1, 'rgba(14, 165, 233, 0.0)');
-    
     waterChart = new Chart(ctx, { 
         type: 'line', 
         data: { 
             labels: [], 
             datasets: [
-                { label: 'ACTUAL', data: [], borderColor: '#0ea5e9', backgroundColor: grad, borderWidth: 2, fill: true, tension: 0.2, pointRadius: 2, pointBackgroundColor: '#0ea5e9' },
+                { label: 'ACTUAL (CM)', data: [], borderColor: '#0ea5e9', backgroundColor: grad, borderWidth: 2, fill: true, tension: 0.2, pointRadius: 2, pointBackgroundColor: '#0ea5e9' },
                 { label: 'AI PREDICTION', data: [], borderColor: '#ef4444', borderDash: [5, 5], backgroundColor: 'transparent', borderWidth: 2, fill: false, tension: 0.2, pointRadius: 0 }
             ] 
         }, 
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, suggestedMax: 150 }, x: { grid: { display: false } } } } 
+    });
+
+    // 2. Grafik Riwayat Tegangan Solar Panel vs Baterai/Aki + Batas 7.0V
+    const ctxVolt = document.getElementById('powerVoltageChart').getContext('2d');
+    powerVoltageChart = new Chart(ctxVolt, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                { label: '☀️ SOLAR PANEL (V)', data: [], borderColor: '#facc15', backgroundColor: 'rgba(250, 204, 21, 0.12)', borderWidth: 2.5, fill: true, tension: 0.25, pointRadius: 3 },
+                { label: '🔋 BATERAI / AKI (V)', data: [], borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.15)', borderWidth: 2.5, fill: true, tension: 0.25, pointRadius: 3 },
+                { label: '⚠️ BATAS CUTOVER ADAPTOR (7.0V)', data: [], borderColor: '#ef4444', borderDash: [6, 4], borderWidth: 1.8, fill: false, pointRadius: 0 }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: true, position: 'top' } },
+            scales: {
+                y: { beginAtZero: true, suggestedMax: 18, title: { display: true, text: 'TEGANGAN (VOLT)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+
+    // 3. Grafik Riwayat Arus Solar Panel vs Baterai/Aki (mA)
+    const ctxCurr = document.getElementById('powerCurrentChart').getContext('2d');
+    powerCurrentChart = new Chart(ctxCurr, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                { label: '☀️ ARUS SOLAR (mA)', data: [], borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', borderWidth: 2, fill: true, tension: 0.25, pointRadius: 2 },
+                { label: '🔋 ARUS BATERAI / AKI (mA)', data: [], borderColor: '#0ea5e9', backgroundColor: 'rgba(14, 165, 233, 0.1)', borderWidth: 2, fill: true, tension: 0.25, pointRadius: 2 }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: true, position: 'top' } },
+            scales: {
+                y: { beginAtZero: true, suggestedMax: 600, title: { display: true, text: 'ARUS (mA)' } },
+                x: { grid: { display: false } }
+            }
+        }
     });
 
     fetchWeather(); setInterval(fetchWeather, 300000);
@@ -570,6 +712,9 @@ function startFirebaseListeners() {
         relayCH2_Alarm  = (ctrl.alarm === "ON" || ctrl.alarm === "MENYALA");
         relayCH3_Lamp   = (ctrl.lampu === "ON" || ctrl.lampu === "MENYALA");
         relayCH4_Charge = (ctrl.charge_mode === "ADAPTOR") ? "ADAPTOR" : "SOLAR";
+        if (ctrl.ats_mode !== undefined) {
+            isAutoATS = (ctrl.ats_mode === "AUTO");
+        }
 
         isPumpActive = relayCH1_Pump;
         if (isPumpActive) {
@@ -603,7 +748,7 @@ function startFirebaseListeners() {
                 }
             }
 
-            // 1. Update Kartu Utama Atas (Air, Jarak Sensor, Suhu, Flow Meter)
+            // 1. Update Kartu Utama Atas
             document.getElementById('teks-air').innerText = currentWaterLevel;
             if (document.getElementById('top-jarak')) {
                 document.getElementById('top-jarak').innerText = Number(data.distance_cm ?? Math.max(0, 150 - currentWaterLevel)).toFixed(1);
@@ -626,7 +771,7 @@ function startFirebaseListeners() {
                 document.getElementById('flow-bar').classList.remove('active');
             }
 
-            // 2. Update Kartu Atas & Bar Indikator: Solar Panel (INA219 #1)
+            // 2. Update Solar Panel (INA219 #1)
             let sV = Number(data.solar_v ?? 0).toFixed(2);
             let sI = Number(data.solar_i ?? 0).toFixed(0);
             let sP = Number(data.solar_p ?? (sV * sI)).toFixed(0);
@@ -635,18 +780,47 @@ function startFirebaseListeners() {
             if (document.getElementById('top-solar-p')) document.getElementById('top-solar-p').innerText = sP;
             if (document.getElementById('txt-solar')) document.getElementById('txt-solar').innerText = `${sV} V | ${sI} mA`;
             if (document.getElementById('bar-solar')) document.getElementById('bar-solar').style.width = `${Math.min(Math.round((Number(sV) / 18) * 100), 100)}%`;
+            if (document.getElementById('det-solar-v')) document.getElementById('det-solar-v').innerText = `${sV} V`;
+            if (document.getElementById('det-solar-i')) document.getElementById('det-solar-i').innerText = `${sI} mA`;
+            if (document.getElementById('det-solar-p')) document.getElementById('det-solar-p').innerText = `${sP} mW`;
 
-            // 3. Update Kartu Atas & Bar Indikator: Baterai / Aki (INA219 #2)
-            let bV   = Number(data.batt_v ?? 0).toFixed(2);
-            let bI   = Number(data.batt_i ?? 0).toFixed(0);
-            let bPct = data.batt_pct ?? 92;
+            // 3. Update Baterai / Aki (INA219 #2) & Logika Otomatisasi Smart ATS (< 7.0V -> ADAPTOR)
+            let numBattV = Number(data.batt_v ?? 0);
+            let bV       = numBattV.toFixed(2);
+            let bI       = Number(data.batt_i ?? 0).toFixed(0);
+            let bPct     = data.batt_pct ?? 92;
+
             if (document.getElementById('top-batt-v')) document.getElementById('top-batt-v').innerText = bV;
             if (document.getElementById('top-batt-i')) document.getElementById('top-batt-i').innerText = bI;
             if (document.getElementById('top-batt-pct')) document.getElementById('top-batt-pct').innerText = `${bPct}%`;
             if (document.getElementById('txt-batt')) document.getElementById('txt-batt').innerText = `${bV} V | ${bI} mA (${bPct}%)`;
             if (document.getElementById('bar-batt')) document.getElementById('bar-batt').style.width = `${bPct}%`;
+            if (document.getElementById('ats-curr-batt')) {
+                const elAtsBatt = document.getElementById('ats-curr-batt');
+                elAtsBatt.innerText = `${bV} V`;
+                elAtsBatt.style.color = (numBattV > 0.1 && numBattV < ATS_CUTOVER_V) ? 'var(--bahaya)' : 'var(--aman)';
+            }
+            if (document.getElementById('det-batt-v')) document.getElementById('det-batt-v').innerText = `${bV} V`;
+            if (document.getElementById('det-batt-i')) document.getElementById('det-batt-i').innerText = `${bI} mA`;
+            if (document.getElementById('det-batt-pct')) document.getElementById('det-batt-pct').innerText = `${bPct}%`;
 
-            // 4. Update Kartu Atas & Bar Indikator: LoRa Ra-02 SX1278
+            // Eksekusi Otomatis Pindah ke ADAPTOR (CH4) jika Tegangan Aki < 7.0V
+            const cardBatt = document.getElementById('card-batt');
+            if (isAutoATS && numBattV > 0.1) {
+                if (numBattV < ATS_CUTOVER_V && relayCH4_Charge !== "ADAPTOR") {
+                    toggleChargeMode("ADAPTOR");
+                    playBeep(1600, 'sawtooth', 0.4, 0.12);
+                    addLog('PWR', `⚠️ SMART ATS: Tegangan Aki turun ke ${bV}V (< 7.0V)! Otomatis pindah ke ADAPTOR (CH4 ON).`);
+                } else if (numBattV >= ATS_RECOVER_V && relayCH4_Charge === "ADAPTOR") {
+                    toggleChargeMode("SOLAR");
+                    addLog('PWR', `☀️ SMART ATS: Tegangan Aki pulih ke ${bV}V (>= 8.0V). Kembali ke SOLAR PANEL (CH4 OFF).`);
+                }
+            }
+            if (cardBatt) {
+                cardBatt.style.borderColor = (numBattV > 0.1 && numBattV < ATS_CUTOVER_V) ? 'var(--bahaya)' : 'rgba(16, 185, 129, 0.35)';
+            }
+
+            // 4. Update LoRa Ra-02 SX1278
             let lRssi = data.lora_rssi ?? -78;
             if (document.getElementById('top-lora-rssi')) document.getElementById('top-lora-rssi').innerText = lRssi;
             if (document.getElementById('txt-lora')) document.getElementById('txt-lora').innerText = `${lRssi} dBm`;
@@ -687,9 +861,10 @@ function startFirebaseListeners() {
             document.getElementById('teks-status').innerHTML = statusHtml; playVoiceAlarm(data.status);
             if (window.lastTimestamp !== data.timestamp) { addLog(data.status === 'BAHAYA' ? 'ERR' : 'DAT', `⬇️ CLOUD PUSH: W=${data.water_level}cm | Solar=${sV}V | Batt=${bV}V`); window.lastTimestamp = data.timestamp; }
 
-            let labels = globalHistory.map(item => item.timestamp); 
+            // 6. Update Grafik Debit Air
+            let timeLabels = globalHistory.map(item => item.timestamp); 
             let actualData = globalHistory.map(item => item.water_level);
-            labels.push("T+1", "T+2");
+            let waterLabels = [...timeLabels, "T+1", "T+2"];
             let predData = new Array(globalHistory.length - 1).fill(null);
             
             if(globalHistory.length >= 2) {
@@ -699,7 +874,7 @@ function startFirebaseListeners() {
                 predData.push(p2, f1, f2);
             } else { predData.push(currentWaterLevel, currentWaterLevel, currentWaterLevel); }
 
-            waterChart.data.labels = labels; 
+            waterChart.data.labels = waterLabels; 
             waterChart.data.datasets[0].data = actualData; 
             waterChart.data.datasets[0].borderColor = dotColor; waterChart.data.datasets[0].pointBackgroundColor = dotColor;
             waterChart.data.datasets[1].data = predData;
@@ -709,15 +884,40 @@ function startFirebaseListeners() {
             else if(data.status === 'WASPADA') { newGrad.addColorStop(0, 'rgba(245, 158, 11, 0.5)'); newGrad.addColorStop(1, 'rgba(245, 158, 11, 0.0)'); }
             else { newGrad.addColorStop(0, 'rgba(14, 165, 233, 0.3)'); newGrad.addColorStop(1, 'rgba(14, 165, 233, 0.0)'); }
             waterChart.data.datasets[0].backgroundColor = newGrad; waterChart.update();
+
+            // 7. Update Grafik Tegangan & Arus Solar Panel vs Baterai/Aki (Sub-Menu 2)
+            if (powerVoltageChart && powerCurrentChart) {
+                let solarVoltHist = globalHistory.map(item => Number(item.solar_v ?? 0));
+                let battVoltHist  = globalHistory.map(item => Number(item.batt_v ?? 0));
+                let thresholdLine = new Array(timeLabels.length).fill(ATS_CUTOVER_V);
+
+                powerVoltageChart.data.labels = timeLabels;
+                powerVoltageChart.data.datasets[0].data = solarVoltHist;
+                powerVoltageChart.data.datasets[1].data = battVoltHist;
+                powerVoltageChart.data.datasets[2].data = thresholdLine;
+                powerVoltageChart.update();
+
+                let solarCurrHist = globalHistory.map(item => Number(item.solar_i ?? 0));
+                let battCurrHist  = globalHistory.map(item => Number(item.batt_i ?? 0));
+
+                powerCurrentChart.data.labels = timeLabels;
+                powerCurrentChart.data.datasets[0].data = solarCurrHist;
+                powerCurrentChart.data.datasets[1].data = battCurrHist;
+                powerCurrentChart.update();
+            }
             
-            // 6. Update Tabel Lengkap (Air, Flow, Suhu, Solar, Baterai, LoRa, Status)
+            // 8. Update Tabel Overview & Tabel Penuh (Sub-Menu 3)
             let tableHTML = '';
+            let fullTableHTML = '';
             [...globalHistory].reverse().slice(0, 20).forEach(item => { 
                 let ws = item.status === 'BAHAYA' ? '#ef4444' : (item.status === 'WASPADA' ? '#f59e0b' : '#10b981'); 
                 let itemFlow  = item.flow_rate_lpm !== undefined ? `${Number(item.flow_rate_lpm).toFixed(1)} L/m` : '0.0 L/m';
                 let itemSolar = item.solar_v !== undefined ? `${Number(item.solar_v).toFixed(2)}V (${Number(item.solar_i ?? 0).toFixed(0)}mA)` : '0.00V (0mA)';
                 let itemBatt  = item.batt_v !== undefined ? `${Number(item.batt_v).toFixed(2)}V (${item.batt_pct ?? 92}%)` : '0.00V (92%)';
                 let itemLora  = item.lora_rssi !== undefined ? `${item.lora_rssi} dBm` : '-78 dBm';
+                let itemDist  = item.distance_cm !== undefined ? `${Number(item.distance_cm).toFixed(1)} cm` : `${Math.max(0, 150 - (item.water_level ?? 0)).toFixed(1)} cm`;
+                let itemChg   = item.charge_mode ?? relayCH4_Charge;
+
                 tableHTML += `<tr>
                     <td>${item.timestamp}</td>
                     <td><b>${item.water_level} cm</b></td>
@@ -727,18 +927,35 @@ function startFirebaseListeners() {
                     <td style="color:#10b981;">${itemBatt}</td>
                     <td style="color:#0ea5e9;">${itemLora}</td>
                     <td style="color:${ws}; font-weight:bold;">${item.status}</td>
-                </tr>`; 
+                </tr>`;
+
+                fullTableHTML += `<tr>
+                    <td>${item.timestamp}</td>
+                    <td style="color:var(--primary);">${item.device_id}</td>
+                    <td><b>${item.water_level} cm</b></td>
+                    <td>${itemDist}</td>
+                    <td>${itemFlow}</td>
+                    <td>${item.temperature} °C</td>
+                    <td style="color:#facc15;">${itemSolar}</td>
+                    <td style="color:#10b981;">${itemBatt}</td>
+                    <td style="color:${itemChg === 'ADAPTOR' ? '#a855f7' : '#10b981'}; font-weight:bold;">${itemChg}</td>
+                    <td style="color:#0ea5e9;">${itemLora}</td>
+                    <td style="color:${ws}; font-weight:bold;">${item.status}</td>
+                </tr>`;
             });
             document.getElementById('tableBody').innerHTML = tableHTML;
+            if (document.getElementById('fullTableBody')) {
+                document.getElementById('fullTableBody').innerHTML = fullTableHTML;
+            }
         }
     });
 }
 
 function downloadCSV() {
     if (!globalHistory.length) return;
-    let csv = "Waktu,Node ID,Water Level (cm),Flow Rate (L/min),Temperature (C),Solar (V),Solar (mA),Battery (V),Battery (mA),Battery (%),LoRa RSSI (dBm),Status\n";
+    let csv = "Waktu,Node ID,Water Level (cm),Distance (cm),Flow Rate (L/min),Temperature (C),Solar (V),Solar (mA),Battery (V),Battery (mA),Battery (%),Charge Mode (CH4),LoRa RSSI (dBm),Status\n";
     globalHistory.forEach(r => {
-        csv += `${r.timestamp},${r.device_id},${r.water_level},${r.flow_rate_lpm ?? 0},${r.temperature},${r.solar_v ?? 0},${r.solar_i ?? 0},${r.batt_v ?? 0},${r.batt_i ?? 0},${r.batt_pct ?? 92},${r.lora_rssi ?? -78},${r.status}\n`;
+        csv += `${r.timestamp},${r.device_id},${r.water_level},${r.distance_cm ?? 0},${r.flow_rate_lpm ?? 0},${r.temperature},${r.solar_v ?? 0},${r.solar_i ?? 0},${r.batt_v ?? 0},${r.batt_i ?? 0},${r.batt_pct ?? 92},${r.charge_mode ?? 'SOLAR'},${r.lora_rssi ?? -78},${r.status}\n`;
     });
     let blob = new Blob([csv], { type: 'text/csv' });
     let a = document.createElement('a');
