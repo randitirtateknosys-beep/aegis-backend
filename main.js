@@ -708,6 +708,19 @@ async function fetchWeather() {
 function startFirebaseListeners() {
     database.ref('kontrol').on('value', (snapshot) => {
         let ctrl = snapshot.val() || {};
+        // Otomatis perbarui IP ESP32-CAM jika berubah di jaringan Hotspot
+        if (ctrl.cam_ip && ctrl.cam_ip !== "") {
+            let newCamIP = `http://${ctrl.cam_ip}`;
+            if (ESPCAM_IP !== newCamIP) {
+                ESPCAM_IP = newCamIP;
+                localStorage.setItem('aegis_cam_ip', ESPCAM_IP);
+                const camEl = document.getElementById('espcam-stream');
+                const lblEl = document.getElementById('cam-ip-label');
+                if (camEl) camEl.src = `${ESPCAM_IP}:81/stream`;
+                if (lblEl) lblEl.innerText = `${ctrl.cam_ip}:81`;
+                addLog('CAM', `🔄 Auto-Sync IP ESP32-CAM terdeteksi di: ${ESPCAM_IP}`);
+            }
+        }
         relayCH1_Pump   = (ctrl.pompa === "ON" || ctrl.pompa === "MENYALA");
         relayCH2_Alarm  = (ctrl.alarm === "ON" || ctrl.alarm === "MENYALA");
         relayCH3_Lamp   = (ctrl.lampu === "ON" || ctrl.lampu === "MENYALA");
