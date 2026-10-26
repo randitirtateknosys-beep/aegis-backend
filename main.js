@@ -11,9 +11,9 @@ const firebaseConfig = {
 if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
 const database = firebase.database();
 
-// ================= PENGATURAN IP KAMERA & IP SERVO (ESP32 UTAMA) =================
+// ================= PENGATURAN IP KAMERA & IP ESP32 UTAMA =================
 let ESPCAM_IP  = localStorage.getItem('aegis_cam_ip')  || "http://10.78.168.1";
-let ESPMAIN_IP = localStorage.getItem('aegis_main_ip') || ""; // Otomatis terisi dari Firebase (data.node_ip)
+let ESPMAIN_IP = localStorage.getItem('aegis_main_ip') || "";
 
 let currentCamZoom = 1.0;
 let isCamCoverMode = false;
@@ -21,18 +21,20 @@ let cloudPanAngle  = 90;
 let cloudTiltAngle = 90;
 const SERVO_STEP   = 15;
 
-// Fungsi Menggerakkan 2 Servo pada ESP32 Utama (Via Local HTTP + Cloud Firebase Backup)
-window.moveCam = function(direction) {
-    // Tukar arah up & down secara otomatis dari sisi Web tanpa perlu upload ulang ESP32
-    let actualDir = direction;
-    if (direction === 'up')   actualDir = 'down';
-    if (direction === 'down') actualDir = 'up';
+// Status Memori 4-Channel Relay
+let relayCH1_Pump   = false;
+let relayCH2_Alarm  = false;
+let relayCH3_Lamp   = false;
+let relayCH4_Charge = "SOLAR"; // "SOLAR" atau "ADAPTOR"
+let testAlarmLoop   = null;
 
-    if (actualDir === 'left')   cloudPanAngle  = Math.min(180, cloudPanAngle + SERVO_STEP);
-    if (actualDir === 'right')  cloudPanAngle  = Math.max(0, cloudPanAngle - SERVO_STEP);
-    if (actualDir === 'up')     cloudTiltAngle = Math.max(0, cloudTiltAngle - SERVO_STEP);
-    if (actualDir === 'down')   cloudTiltAngle = Math.min(180, cloudTiltAngle + SERVO_STEP);
-    if (actualDir === 'center') { cloudPanAngle = 90; cloudTiltAngle = 90; }
+// Fungsi Menggerakkan 2 Servo (Sumbu Y sudah dibalik sesuai posisi mekanik Anda)
+window.moveCam = function(direction) {
+    if (direction === 'left')   cloudPanAngle  = Math.min(180, cloudPanAngle + SERVO_STEP);
+    if (direction === 'right')  cloudPanAngle  = Math.max(0, cloudPanAngle - SERVO_STEP);
+    if (direction === 'up')     cloudTiltAngle = Math.min(180, cloudTiltAngle + SERVO_STEP);
+    if (direction === 'down')   cloudTiltAngle = Math.max(0, cloudTiltAngle - SERVO_STEP);
+    if (direction === 'center') { cloudPanAngle = 90; cloudTiltAngle = 90; }
 
     database.ref('kontrol').update({
         pan: cloudPanAngle,
@@ -40,7 +42,7 @@ window.moveCam = function(direction) {
     });
 
     if (ESPMAIN_IP !== "") {
-        fetch(`${ESPMAIN_IP}/servo?go=${actualDir}`)
+        fetch(`${ESPMAIN_IP}/servo?go=${direction}`)
             .then(res => res.json())
             .then(data => {
                 cloudPanAngle  = data.pan;
@@ -50,7 +52,105 @@ window.moveCam = function(direction) {
             .catch(() => {
                 addLog('SRV', `Cloud Servo -> X(Pan):${cloudPanAngle}° | Y(Tilt):${cloudTiltAngle}°`);
             });
+    } else {
+        addLog('SRV', `Cloud Servo -> X(Pan):${cloudPanAngle}° | Y(Tilt):${cloudTiltAngle}°`);
     }
+};
+
+// ================= FUNGSI KONTROL & TEST 4-CHANNEL RELAY =================
+function updateRelayButtonsUI() {
+    // CH1: Pompa Air
+    const btn1 = document.getElementById('btn-relay-ch1');
+    const bdg1 = document.getElementById('badge-ch1');
+    if (btn1 && bdg1) {
+        bdg1.innerText = relayCH1_Pump ? "ON" : "OFF";
+        btn1.style.background = relayCH1_Pump ? "var(--primary)" : "transparent";
+        btn1.style.color      = relayCH1_Pump ? "#000" : "var(--primary)";
+    }
+
+    // CH2: Alarm Sirine
+    const btn2 = document.getElementById('btn-relay-ch2');
+    const bdg2 = document.getElementById('badge-ch2');
+    if (btn2 && bdg2) {
+        bdg2.innerText = relayCH2_Alarm ? "ON" : "OFF";
+        btn2.style.background = relayCH2_Alarm ? "var(--bahaya)" : "transparent";
+        btn2.style.color      = relayCH2_Alarm ? "#fff" : "var(--bahaya)";
+    }
+
+    // CH3: Lampu Waspada Orange
+    const btn3 = document.getElementById('btn-relay-ch3');
+    const bdg3 = document.getElementById('badge-ch3');
+    if (btn3 && bdg3) {
+        bdg3.innerText = relayCH3_Lamp ? "ON" : "OFF";
+        btn3.style.background = relayCH3_Lamp ? "var(--waspada)" : "transparent";
+        btn3.style.color      = relayCH3_Lamp ? "#000" : "var(--waspada)";
+    }
+
+    // CH4: Mode Charging (Solar Panel vs Adaptor)
+    const btn4 = document.getElementById('btn-relay-ch4');
+    const bdg4 = document.getElementById('badge-ch4');
+    if (btn4 && bdg4) {
+        if (relayCH4_Charge === "ADAPTOR") {
+            bdg4.innerText = "🔌 ADAPTOR";
+            btn4.style.borderColor = "#a855f7";
+            btn4.style.color       = "#fff";
+            btn4.style.background  = "rgba(168, 85, 247, 0.35)";
+        } else {
+            bdg4.innerText = "☀️ SOLAR";
+            btn4.style.borderColor = "var(--aman)";
+            btn4.style.color       = "var(--aman)";
+            btn4.style.background  = "transparent";
+        }
+    }
+}
+
+window.toggleRelayTest = function(channel) {
+    if (channel === 1) {
+        relayCH1_Pump = !relayCH1_Pump;
+        let st = relayCH1_Pump ? "ON" : "OFF";
+        database.ref('kontrol').update({ pompa: st });
+        if (ESPMAIN_IP !== "") fetch(`${ESPMAIN_IP}/relay?ch=1&val=${st}`).catch(() => {});
+        addLog('TST', `🚰 TEST POMPA (CH1): ${st}`);
+    } else if (channel === 2) {
+        relayCH2_Alarm = !relayCH2_Alarm;
+        let st = relayCH2_Alarm ? "ON" : "OFF";
+        database.ref('kontrol').update({ alarm: st });
+        if (ESPMAIN_IP !== "") fetch(`${ESPMAIN_IP}/relay?ch=2&val=${st}`).catch(() => {});
+        
+        // Bunyikan juga efek sirine & visual alarm di Web saat Test Alarm ON
+        if (relayCH2_Alarm) {
+            document.body.classList.add('danger-mode');
+            playBeep(2000, 'square', 0.5, 0.15);
+            let msg = new SpeechSynthesisUtterance("Pengujian sistem alarm sirine diaktifkan.");
+            msg.lang = 'id-ID'; window.speechSynthesis.speak(msg);
+            if (!testAlarmLoop) {
+                testAlarmLoop = setInterval(() => { playBeep(1800, 'sawtooth', 0.3, 0.1); }, 1000);
+            }
+        } else {
+            if (currentStatus !== 'BAHAYA') document.body.classList.remove('danger-mode');
+            if (testAlarmLoop) { clearInterval(testAlarmLoop); testAlarmLoop = null; }
+        }
+        addLog('TST', `🚨 TEST ALARM SIRINE (CH2): ${st}`);
+    } else if (channel === 3) {
+        relayCH3_Lamp = !relayCH3_Lamp;
+        let st = relayCH3_Lamp ? "ON" : "OFF";
+        database.ref('kontrol').update({ lampu: st });
+        if (ESPMAIN_IP !== "") fetch(`${ESPMAIN_IP}/relay?ch=3&val=${st}`).catch(() => {});
+        addLog('TST', `🟠 TEST LAMPU ORANGE WASPADA (CH3): ${st}`);
+    }
+    updateRelayButtonsUI();
+};
+
+window.toggleChargeMode = function(forceMode = null) {
+    if (forceMode) {
+        relayCH4_Charge = forceMode;
+    } else {
+        relayCH4_Charge = (relayCH4_Charge === "SOLAR") ? "ADAPTOR" : "SOLAR";
+    }
+    database.ref('kontrol').update({ charge_mode: relayCH4_Charge });
+    if (ESPMAIN_IP !== "") fetch(`${ESPMAIN_IP}/relay?ch=4&val=${relayCH4_Charge}`).catch(() => {});
+    addLog('PWR', `⚡ CH4 Sumber Pengisian diubah ke: MODE ${relayCH4_Charge}`);
+    updateRelayButtonsUI();
 };
 
 window.toggleFlashLED = function(customAction = 'flash') {
@@ -87,24 +187,15 @@ window.toggleCamFit = function() {
     isCamCoverMode = !isCamCoverMode;
     const camEl = document.getElementById('espcam-stream');
     const btnFit = document.getElementById('btn-fit');
-    if (camEl) {
-        camEl.style.objectFit = isCamCoverMode ? 'cover' : 'contain';
-    }
-    if (btnFit) {
-        btnFit.innerText = isCamCoverMode ? '🖼️ FIT LAYAR' : '🖼️ FULL SENSOR';
-    }
-    addLog('CAM', isCamCoverMode ? 'Mode Rasio: Penuh Kotak (Cover)' : 'Mode Rasio: Utuh Tanpa Potong (Full Sensor)');
+    if (camEl) camEl.style.objectFit = isCamCoverMode ? 'cover' : 'contain';
+    if (btnFit) btnFit.innerText = isCamCoverMode ? '🖼️ FIT LAYAR' : '🖼️ FULL SENSOR';
 };
 
 function applyCamTransform() {
     const camEl = document.getElementById('espcam-stream');
     const zoomLbl = document.getElementById('cam-zoom-label');
-    if (camEl) {
-        camEl.style.transform = `scale(${currentCamZoom})`;
-    }
-    if (zoomLbl) {
-        zoomLbl.innerText = `${currentCamZoom.toFixed(1)}x`;
-    }
+    if (camEl) camEl.style.transform = `scale(${currentCamZoom})`;
+    if (zoomLbl) zoomLbl.innerText = `${currentCamZoom.toFixed(1)}x`;
 }
 
 window.changeCamIPPrompt = function() {
@@ -231,7 +322,7 @@ function verifyLogin() {
 function startBootSequence() {
     document.getElementById('boot-screen').style.visibility = 'visible'; document.getElementById('boot-screen').style.opacity = '1';
     const bootLog = document.getElementById('boot-log');
-    const messages = [ "> MENGHUBUNGKAN KE FIREBASE WEBSOCKET...", "> MEMUAT PETA SATELIT KALIDERES...", "> MENGAKTIFKAN STREAMING ESP32-CAM & SERVO...", "> SISTEM A.E.G.I.S CLOUD SIAP." ];
+    const messages = [ "> MENGHUBUNGKAN KE FIREBASE WEBSOCKET...", "> MENGKALIBRASI MODUL RELAY 4-CHANNEL...", "> MENGAKTIFKAN STREAMING ESP32-CAM & SERVO...", "> SISTEM A.E.G.I.S CLOUD SIAP." ];
     let i = 0;
     let bootInterval = setInterval(() => {
         if(i < messages.length) { bootLog.innerHTML += messages[i] + "<br>"; playBeep(400 + (i*100), 'square', 0.05, 0.02); i++; } 
@@ -313,10 +404,10 @@ if(recognition) {
         let jawaban = "Sistem gagal menemukan referensi dalam memori lokal. Harap ulangi instruksi.";
         if(perintah.includes('air') || perintah.includes('banjir')) jawaban = `Tinggi air saat ini ${currentWaterLevel} sentimeter. Status ${currentStatus}.`; 
         else if(perintah.includes('cuaca')) jawaban = `Pemindaian satelit menunjukkan cuaca ${document.getElementById('teks-cuaca').innerText}.`; 
-        else if(perintah.includes('pompa') || perintah.includes('flow')) jawaban = `Aliran air saat ini ${document.getElementById('yf-flowrate').innerText} liter per menit.`; 
+        else if(perintah.includes('pompa') || perintah.includes('flow')) jawaban = `Pompa berstatus ${relayCH1_Pump ? 'menyala' : 'siaga'} dengan aliran ${document.getElementById('yf-flowrate').innerText} liter per menit.`; 
         else if(perintah.includes('lampu') || perintah.includes('flash')) { toggleFlashLED(); jawaban = "Mengubah status lampu flash kamera."; }
         else if(perintah.includes('suhu')) jawaban = `Termal internal stabil di angka ${document.getElementById('teks-suhu').innerText} derajat celcius.`;
-        else if(perintah.includes('baterai') || perintah.includes('aki')) jawaban = `Status daya baterai ${document.getElementById('txt-batt').innerText}.`;
+        else if(perintah.includes('baterai') || perintah.includes('aki')) jawaban = `Status daya baterai ${document.getElementById('txt-batt').innerText}. Mode pengisian saat ini menggunakan ${relayCH4_Charge}.`;
         else if(perintah.includes('sinyal') || perintah.includes('lora')) jawaban = `Kekuatan sinyal LoRa terpantau pada ${document.getElementById('txt-lora').innerText}.`;
         else if(perintah.includes('laporan') || perintah.includes('sistem')) jawaban = `Diagnosis penuh: Air ${currentWaterLevel} senti, Suhu ${document.getElementById('teks-suhu').innerText} derajat. Seluruh instrumen beroperasi normal.`;
         addLog('AI', `Out: "${jawaban}"`); let msg = new SpeechSynthesisUtterance(jawaban); msg.lang = 'id-ID'; msg.pitch = 1.1; msg.rate = 0.95; window.speechSynthesis.speak(msg); recognition.stop();
@@ -366,11 +457,17 @@ document.getElementById('cmd-input').addEventListener('keypress', function(e) {
         if (cmd === 'clear') { 
             document.getElementById('terminalLog').innerHTML = ''; 
         } else if (cmd === 'pump on') { 
-            database.ref('kontrol/pompa').set("ON"); 
-            addLog('NET', 'MENGIRIM PERINTAH POMPA "ON" KE FIREBASE...'); 
+            relayCH1_Pump = false; toggleRelayTest(1);
         } else if (cmd === 'pump off') { 
-            database.ref('kontrol/pompa').set("OFF"); 
-            addLog('NET', 'MENGIRIM PERINTAH POMPA "OFF" KE FIREBASE...'); 
+            relayCH1_Pump = true; toggleRelayTest(1);
+        } else if (cmd === 'alarm on') { 
+            relayCH2_Alarm = false; toggleRelayTest(2);
+        } else if (cmd === 'alarm off') { 
+            relayCH2_Alarm = true; toggleRelayTest(2);
+        } else if (cmd === 'mode solar') { 
+            toggleChargeMode('SOLAR');
+        } else if (cmd === 'mode adaptor') { 
+            toggleChargeMode('ADAPTOR');
         } else if (cmd === 'flash on') {
             toggleFlashLED('flash_on');
         } else if (cmd === 'flash off') {
@@ -388,7 +485,7 @@ document.getElementById('cmd-input').addEventListener('keypress', function(e) {
             let ipServo = cmd.replace('setservo ', '').trim();
             ESPMAIN_IP = `http://${ipServo}`;
             localStorage.setItem('aegis_main_ip', ESPMAIN_IP);
-            addLog('SRV', `IP Servo ESP32 Utama diubah ke: ${ESPMAIN_IP}`);
+            addLog('SRV', `IP ESP32 Utama diubah ke: ${ESPMAIN_IP}`);
         } else if (cmd === 'override aegis') { 
             playBeep(2500, 'sawtooth', 0.5, 0.2);
             document.body.classList.add('danger-mode');
@@ -460,23 +557,27 @@ async function fetchWeather() {
 }
 
 function startFirebaseListeners() {
-    database.ref('kontrol/pompa').on('value', (snapshot) => {
-        let val = snapshot.val();
-        if (val === "ON" || val === "MENYALA") {
-            isPumpActive = true;
+    // Listener Sinkronisasi Status 4-Channel Relay dari Firebase /kontrol
+    database.ref('kontrol').on('value', (snapshot) => {
+        let ctrl = snapshot.val() || {};
+        relayCH1_Pump   = (ctrl.pompa === "ON" || ctrl.pompa === "MENYALA");
+        relayCH2_Alarm  = (ctrl.alarm === "ON" || ctrl.alarm === "MENYALA");
+        relayCH3_Lamp   = (ctrl.lampu === "ON" || ctrl.lampu === "MENYALA");
+        relayCH4_Charge = (ctrl.charge_mode === "ADAPTOR") ? "ADAPTOR" : "SOLAR";
+
+        isPumpActive = relayCH1_Pump;
+        if (isPumpActive) {
             document.getElementById('pump-icon').classList.add('active');
             document.getElementById('flow-bar').classList.add('active');
-            document.getElementById('pump-status-text').innerText = 'MODBUS: ACTIVE (PUMP ON)';
+            document.getElementById('pump-status-text').innerText = 'RELAY CH1: ACTIVE (PUMP ON)';
             document.getElementById('pump-status-text').style.color = '#fff';
-            addLog('NET', '⬇️ CORIOLIS DIAGNOSTICS: FLOW INITIATED.');
         } else {
-            isPumpActive = false;
             document.getElementById('pump-icon').classList.remove('active');
             document.getElementById('flow-bar').classList.remove('active');
-            document.getElementById('pump-status-text').innerText = 'MODBUS: STANDBY';
+            document.getElementById('pump-status-text').innerText = 'RELAY CH1: STANDBY';
             document.getElementById('pump-status-text').style.color = 'var(--text-muted)';
-            addLog('NET', '⬇️ CORIOLIS DIAGNOSTICS: FLOW HALTED.');
         }
+        updateRelayButtonsUI();
     });
 
     database.ref('sensor/logs').limitToLast(20).on('value', (snapshot) => {
@@ -487,13 +588,12 @@ function startFirebaseListeners() {
             currentWaterLevel = data.water_level ?? 0;
             currentStatus = data.status ?? "AMAN";
 
-            // Otomatis tangkap IP ESP32 Utama untuk kontrol Servo X & Y
             if (data.node_ip && data.node_ip !== "") {
                 let detectedIP = `http://${data.node_ip}`;
                 if (ESPMAIN_IP !== detectedIP) {
                     ESPMAIN_IP = detectedIP;
                     localStorage.setItem('aegis_main_ip', ESPMAIN_IP);
-                    addLog('SRV', `Node Servo ESP32 Utama terdeteksi di: ${ESPMAIN_IP}`);
+                    addLog('SYS', `Node ESP32 Utama terdeteksi di: ${ESPMAIN_IP}`);
                 }
             }
 
@@ -505,15 +605,10 @@ function startFirebaseListeners() {
             let flowLPM = Number(data.flow_rate_lpm ?? 0).toFixed(2);
             let massKGS = Number(data.mass_flow_kgs ?? 0).toFixed(2);
 
-            if (document.getElementById('teks-flow')) {
-                document.getElementById('teks-flow').innerText = flowLPM;
-            }
-            if (document.getElementById('yf-flowrate')) {
-                document.getElementById('yf-flowrate').innerText = flowLPM;
-            }
-            if (document.getElementById('coriolis-mass')) {
-                document.getElementById('coriolis-mass').innerText = massKGS;
-            }
+            if (document.getElementById('teks-flow')) document.getElementById('teks-flow').innerText = flowLPM;
+            if (document.getElementById('yf-flowrate')) document.getElementById('yf-flowrate').innerText = flowLPM;
+            if (document.getElementById('coriolis-mass')) document.getElementById('coriolis-mass').innerText = massKGS;
+
             if (Number(flowLPM) > 0) {
                 document.getElementById('flow-bar').classList.add('active');
             } else if (!isPumpActive) {
@@ -538,10 +633,17 @@ function startFirebaseListeners() {
                 document.getElementById('bar-lora').style.width = `${Math.max(10, Math.min(100, 130 + Number(data.lora_rssi)))}%`;
             }
 
+            // Sinkronisasi Otomatis CH1 (Pompa), CH2 (Alarm), CH3 (Lampu Orange Waspada) Berdasarkan Status Banjir
             if (data.status === 'BAHAYA' && !isEvacActive) {
-                isEvacActive = true; routingControl.addTo(map); markerPosko.openPopup(); map.setView([KALIDERES_LAT, KALIDERES_LNG], 15); database.ref('kontrol/pompa').set("ON"); addLog('SYS', '🚨 PROTOKOL EVAKUASI AKTIF.');
+                isEvacActive = true; routingControl.addTo(map); markerPosko.openPopup(); map.setView([KALIDERES_LAT, KALIDERES_LNG], 15);
+                database.ref('kontrol').update({ pompa: "ON", alarm: "ON", lampu: "OFF" });
+                addLog('SYS', '🚨 PROTOKOL EVAKUASI AKTIF: Pompa (CH1) & Alarm (CH2) MENYALA!');
+            } else if (data.status === 'WASPADA') {
+                database.ref('kontrol').update({ lampu: "ON", alarm: "OFF" });
             } else if (data.status === 'AMAN' && isEvacActive) {
-                isEvacActive = false; map.removeControl(routingControl); markerPosko.closePopup(); database.ref('kontrol/pompa').set("OFF"); addLog('SYS', '✅ PROTOKOL DIHENTIKAN.');
+                isEvacActive = false; map.removeControl(routingControl); markerPosko.closePopup();
+                database.ref('kontrol').update({ pompa: "OFF", alarm: "OFF", lampu: "OFF" });
+                addLog('SYS', '✅ PROTOKOL DIHENTIKAN: Kondisi Kembali Aman.');
             }
 
             if (systemBooted && previousStatus !== null) {
