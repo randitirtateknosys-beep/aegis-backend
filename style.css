@@ -1,5 +1,4 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
-
 * { box-sizing: border-box; }
 :root {
     --text-main: #f8fafc; --text-muted: #94a3b8;
