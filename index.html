@@ -15,11 +15,11 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌐</text></svg>">
-    <link rel="stylesheet" href="./style.css?v=smart1">
+    <link rel="stylesheet" href="./style.css?v=smart2">
 </head>
 <body id="report-area">
 
-    <!-- DEV ONLY: CONTROL DECK -->
+    <!-- DEV ONLY: CONTROL DECK (SIMULASI) -->
     <div id="control-deck" class="glass-panel dev-only">
         <div class="deck-content">
             <h4 style="color:var(--primary); margin-top:0; font-family:var(--font-mono);">DEVELOPER DECK</h4>
@@ -31,7 +31,7 @@
         </div>
     </div>
 
-    <!-- GATEWAY LOGIN -->
+    <!-- GATEWAY LOGIN ROLE-BASED -->
     <div id="login-screen">
         <div class="login-box glass-panel">
             <h2>A.E.G.I.S SYSTEM</h2>
@@ -47,7 +47,6 @@
         </div>
     </div>
 
-    <!-- BOOT SCREEN -->
     <div id="boot-screen">
         <div class="boot-spinner"></div>
         <div class="boot-log" id="boot-log">> Memuat Modul Lingkungan Pintar...<br></div>
@@ -55,7 +54,6 @@
 
     <canvas id="weather-canvas"></canvas>
 
-    <!-- DASHBOARD CORE -->
     <div id="dashboard-core" style="display: none; opacity: 0; transition: opacity 1s;">
         <div class="header glass-panel">
             <div class="header-title">
@@ -71,15 +69,14 @@
                     <span style="font-weight:bold; color:var(--primary);"><span id="online-count">1</span> ONLINE</span>
                     <div id="online-list" class="online-dropdown">Memuat...</div>
                 </div>
-
                 <button class="btn-sfx dev-only" onclick="toggleDeck()" style="background: var(--primary); color: #fff; border: none; padding: 8px 12px; border-radius: 20px; font-weight: 600; font-size: 11px;">⚙️ DEV DECK</button>
                 <button class="theme-toggle btn-sfx" id="btn-theme" onclick="toggleTheme()">🌞 TERANG</button>
                 <div class="live-clock"><p id="teks-jam">00:00:00</p><p id="teks-tanggal">Memuat...</p></div>
             </div>
         </div>
 
-        <!-- WIDGET INDIKATOR ATAS -->
-        <div class="widget-grid">
+        <!-- 8 WIDGET UTAMA (SELALU TAMPIL) -->
+        <div class="widget-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
             <div class="widget-card glass-panel" id="card-status">
                 <div class="widget-info">
                     <h4>STATUS LINGKUNGAN</h4>
@@ -88,13 +85,14 @@
                 </div>
                 <div class="widget-icon">🛡️</div>
             </div>
-            <div class="widget-card glass-panel" id="card-air">
-                <div class="widget-info">
+            <div class="widget-card glass-panel" id="card-air" style="overflow: hidden; position: relative;">
+                <canvas id="fluid-canvas" style="position:absolute; bottom:0; left:0; width:100%; height:100%; z-index:0; opacity:0.35;"></canvas>
+                <div class="widget-info" style="z-index:2;">
                     <h4>ELEVASI AIR</h4>
                     <p><span id="teks-air">0</span> <span style="font-size: 14px; color: var(--primary);">CM</span></p>
                     <div class="widget-sub">Jarak Sensor: <span id="top-jarak">150.0</span> cm</div>
                 </div>
-                <div class="widget-icon" style="color:var(--primary);">🌊</div>
+                <div class="widget-icon" style="color:var(--primary); z-index:2;">🌊</div>
             </div>
             <div class="widget-card glass-panel">
                 <div class="widget-info">
@@ -112,23 +110,48 @@
                 </div>
                 <div class="widget-icon" style="color:var(--primary);">🌡️</div>
             </div>
+            <div class="widget-card glass-panel" style="border-color: rgba(245, 158, 11, 0.35);">
+                <div class="widget-info">
+                    <h4 style="color: var(--waspada);">☀️ SOLAR PANEL (INA1)</h4>
+                    <p><span id="top-solar-v">0.00</span> <span style="font-size: 14px; color: var(--waspada);">VOLT</span></p>
+                    <div class="widget-sub">ARUS: <span id="top-solar-i" style="color:#facc15; font-weight:bold;">0</span> mA | <span id="top-solar-p">0</span> mW</div>
+                </div>
+                <div class="widget-icon">☀️</div>
+            </div>
+            <div class="widget-card glass-panel" id="card-batt" style="border-color: rgba(16, 185, 129, 0.35);">
+                <div class="widget-info">
+                    <h4 style="color: var(--aman);">🔋 BATERAI / AKI (INA2)</h4>
+                    <p><span id="top-batt-v">0.00</span> <span style="font-size: 14px; color: var(--aman);">VOLT</span></p>
+                    <div class="widget-sub">ARUS: <span id="top-batt-i" style="color:var(--aman); font-weight:bold;">0</span> mA (<span id="top-batt-pct" style="color:#fff;">92%</span>)</div>
+                </div>
+                <div class="widget-icon">🔋</div>
+            </div>
+            <div class="widget-card glass-panel">
+                <div class="widget-info">
+                    <h4>📡 SINYAL LORA</h4>
+                    <p><span id="top-lora-rssi">-78</span> <span style="font-size: 14px; color: var(--primary);">dBm</span></p>
+                    <div class="widget-sub">FREKUENSI: <span style="color:var(--primary); font-weight:bold;">433 MHz</span></div>
+                </div>
+                <div class="widget-icon" style="color:var(--primary);">📡</div>
+            </div>
+            <div class="widget-card glass-panel" id="card-charge">
+                <div class="widget-info">
+                    <h4>⚡ SUMBER PENGISIAN</h4>
+                    <p id="top-charge-mode" style="font-size: 18px; color: var(--aman); margin-top: 10px; font-weight:bold;">☀️ SOLAR PANEL</p>
+                    <div class="widget-sub">ATS (<7V): <span id="top-ats-stat" style="color:var(--aman); font-weight:bold;">AUTO</span></div>
+                </div>
+                <div class="widget-icon">⚡</div>
+            </div>
         </div>
 
         <!-- NAVIGASI TAB -->
         <div class="sub-nav-bar glass-panel">
-            <button class="sub-nav-btn active btn-sfx" id="tab-btn-overview" onclick="switchSubMenu('overview')">
-                📊 DASHBOARD UTAMA
-            </button>
-            <button class="sub-nav-btn btn-sfx" id="tab-btn-power" onclick="switchSubMenu('power')">
-                ⚡ MANAJEMEN DAYA & SMART ATS
-            </button>
-            <button class="sub-nav-btn btn-sfx" id="tab-btn-logs" onclick="switchSubMenu('logs')">
-                📋 DATABASE & ANALITIK
-            </button>
+            <button class="sub-nav-btn active btn-sfx" id="tab-btn-overview" onclick="switchSubMenu('overview')">📊 DASHBOARD UTAMA</button>
+            <button class="sub-nav-btn btn-sfx" id="tab-btn-power" onclick="switchSubMenu('power')">⚡ MANAJEMEN DAYA & SMART ATS</button>
+            <button class="sub-nav-btn btn-sfx" id="tab-btn-logs" onclick="switchSubMenu('logs')">📋 DATABASE & ANALITIK LENGKAP</button>
         </div>
 
         <div id="content-area">
-            
             <!-- SUB-MENU 1: DASHBOARD UTAMA -->
             <div id="view-overview" class="grand-layout">
                 <div class="left-column">
@@ -143,9 +166,7 @@
                         <div class="map-container"><div id="map"></div></div>
                     </div>
                     <div class="content-box glass-panel">
-                        <div class="header-box">
-                            <h3>📈 TREN ELEVASI AIR</h3>
-                        </div>
+                        <div class="header-box"><h3>📈 TREN ELEVASI AIR</h3></div>
                         <div class="chart-container"><canvas id="waterChart"></canvas></div>
                     </div>
                 </div>
@@ -163,14 +184,12 @@
                         <div class="cctv-feed" id="cctv-feed">
                             <img id="espcam-stream" src="http://10.78.168.1:81/stream" style="width:100%; height:100%; object-fit:contain; position:absolute; top:0; left:0; transition: transform 0.2s;" alt="Kamera Offline">
                             
-                            <!-- Zoom Controls (Semua User) -->
                             <div style="position:absolute; bottom:12px; left:12px; z-index:10; display:flex; gap:5px;">
                                 <button class="btn-servo" onclick="adjustZoom(-0.2)">➖</button>
                                 <button class="btn-servo" onclick="resetZoom()" style="font-size:10px;">1.0x</button>
                                 <button class="btn-servo" onclick="adjustZoom(0.2)">➕</button>
                             </div>
 
-                            <!-- Servo Controls (Dev Only) -->
                             <div class="servo-pad dev-only">
                                 <div></div><button class="btn-servo" onclick="moveCam('up')">▲</button><div></div>
                                 <button class="btn-servo" onclick="moveCam('left')">◀</button><button class="btn-servo" onclick="moveCam('center')">●</button><button class="btn-servo" onclick="moveCam('right')">▶</button>
@@ -180,9 +199,7 @@
                     </div>
 
                     <div class="content-box glass-panel dev-only">
-                        <div class="header-box">
-                            <h3>⚡ SISTEM AKTUATOR RELAY</h3>
-                        </div>
+                        <div class="header-box"><h3>⚡ SISTEM AKTUATOR RELAY (4-CH)</h3></div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                             <button id="btn-relay-ch1" class="btn-modern" onclick="toggleRelayTest(1)" style="justify-content: space-between;">
                                 <span>🚰 POMPA PENGURAS</span><span id="badge-ch1">OFF</span>
@@ -209,13 +226,11 @@
                 </div>
             </div>
 
-            <!-- SUB-MENU 2: MANAJEMEN DAYA -->
+            <!-- SUB-MENU 2: MANAJEMEN DAYA & ATS -->
             <div id="view-power" class="grand-layout" style="display: none;">
                 <div class="left-column">
                     <div class="content-box glass-panel">
-                        <div class="header-box">
-                            <h3>📈 TREN TEGANGAN & ARUS (INA219)</h3>
-                        </div>
+                        <div class="header-box"><h3>📈 TREN TEGANGAN & ARUS (INA219)</h3></div>
                         <div class="chart-container" style="height: 250px;"><canvas id="powerVoltageChart"></canvas></div>
                         <div class="chart-container" style="height: 200px; margin-top:15px;"><canvas id="powerCurrentChart"></canvas></div>
                     </div>
@@ -241,29 +256,37 @@
                             </div>
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;" class="dev-only">
-                            <button id="btn-ats-auto" class="btn-modern" onclick="setATSMode(true)" style="background: var(--aman); color: #fff;">🤖 MODE OTOMATIS</button>
+                            <button id="btn-ats-auto" class="btn-modern" onclick="setATSMode(true)" style="background: var(--aman); color: #000;">🤖 MODE OTOMATIS</button>
                             <button id="btn-ats-manual" class="btn-modern" onclick="setATSMode(false)">🖐️ MODE MANUAL</button>
+                        </div>
+                        
+                        <div style="margin-top: 15px; padding-top: 12px; border-top: 1px dashed var(--glass-border);" class="dev-only">
+                            <div style="font-size: 10px; font-family: var(--font-mono); color: var(--text-muted); margin-bottom: 8px;">🧪 SIMULASI ATS:</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                <button class="btn-modern" onclick="simulateBatteryVoltage(6.2)" style="justify-content: center; border-color: var(--bahaya); color: var(--bahaya);">📉 UJI DROP (6.2V)</button>
+                                <button class="btn-modern" onclick="simulateBatteryVoltage(12.4)" style="justify-content: center; border-color: var(--aman); color: var(--aman);">📈 UJI PULIH (12.4V)</button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- SUB-MENU 3: DATABASE LOGS -->
+            <!-- SUB-MENU 3: DATABASE LOGS LENGKAP -->
             <div id="view-logs" style="display: none;">
                 <div class="content-box glass-panel">
                     <div class="header-box">
-                        <h3>📋 TABEL RIWAYAT TELEMETRI</h3>
+                        <h3>📋 TABEL RIWAYAT TELEMETRI LENGKAP</h3>
                         <div style="display:flex; gap:10px;">
-                            <button class="btn-modern btn-sfx" onclick="generatePDF()">📄 PDF</button>
-                            <button class="btn-modern btn-sfx" onclick="downloadCSV()">💾 CSV</button>
+                            <button class="btn-modern btn-sfx" onclick="generatePDF()">📄 CETAK PDF</button>
+                            <button class="btn-modern btn-sfx" onclick="downloadCSV()">💾 EXPORT CSV</button>
                         </div>
                     </div>
                     <div class="table-container" style="max-height: 60vh;">
                         <table>
                             <thead>
-                                <tr><th>WAKTU</th><th>LEVEL AIR</th><th>DEBIT</th><th>SUHU</th><th>SOLAR (V)</th><th>BATERAI (V)</th><th>CHARGE</th><th>STATUS</th></tr>
+                                <tr><th>WAKTU</th><th>LEVEL AIR</th><th>JARAK SENSOR</th><th>DEBIT AIR</th><th>SUHU</th><th>SOLAR (V/mA)</th><th>AKI (V/%)</th><th>MODE CHARGE</th><th>LORA RSSI</th><th>STATUS</th></tr>
                             </thead>
-                            <tbody id="fullTableBody"><tr><td colspan="8" style="text-align:center;">Memuat data...</td></tr></tbody>
+                            <tbody id="fullTableBody"><tr><td colspan="10" style="text-align:center;">Memuat data lengkap dari Firebase...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -271,6 +294,6 @@
 
         </div>
     </div> 
-    <script src="./main.js?v=smart1"></script>
+    <script src="./main.js?v=smart2"></script>
 </body>
 </html>
