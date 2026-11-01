@@ -262,6 +262,22 @@ function initMapsAndCharts() {
 function startFirebaseListeners() {
     // 1. Pembacaan Status Aktuator Relay
     database.ref('kontrol').on('value', (snap) => {
+        // Update Widget #9: Status Mitigasi (Pompa CH1, Alarm CH2, Lampu CH3)
+        if (document.getElementById('top-pump-big')) {
+            const pBig = document.getElementById('top-pump-big');
+            pBig.innerText = relayCH1_Pump ? "🚰 POMPA: AKTIF" : "POMPA: STANDBY";
+            pBig.style.color = relayCH1_Pump ? "var(--primary)" : "var(--text-muted)";
+        }
+        if (document.getElementById('top-alarm-stat')) {
+            const aSt = document.getElementById('top-alarm-stat');
+            aSt.innerText = relayCH2_Alarm ? "ON" : "OFF";
+            aSt.style.color = relayCH2_Alarm ? "var(--bahaya)" : "var(--text-muted)";
+        }
+        if (document.getElementById('top-lamp-stat')) {
+            const lSt = document.getElementById('top-lamp-stat');
+            lSt.innerText = relayCH3_Lamp ? "ON" : "OFF";
+            lSt.style.color = relayCH3_Lamp ? "var(--waspada)" : "var(--text-muted)";
+        }
         let c = snap.val() || {};
         relayCH1_Pump = (c.pompa === "ON");
         relayCH2_Alarm = (c.alarm === "ON");
