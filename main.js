@@ -28,7 +28,7 @@ function setHTML(id, val) {
 let userRole = 'developer';
 let userName = 'Operator';
 
-let ESPCAM_IP  = localStorage.getItem('aegis_cam_ip')  || "http://10.78.168.1";
+let ESPCAM_IP  = localStorage.getItem('aegis_cam_ip')  || "";
 let ESPMAIN_IP = localStorage.getItem('aegis_main_ip') || "";
 
 let currentCamZoom = 1.0;
@@ -49,6 +49,8 @@ let testAlarmLoop   = null;
 let currentWaterLevel = 0;
 let currentStatus     = "AMAN";
 let previousStatus    = null;
+let currentDeltaWater = 0;
+let currentNextPred   = 0;
 let isPumpActive      = false;
 let isEvacActive      = false;
 let alarmPlaying      = false;
@@ -79,7 +81,7 @@ window.sendTelegramNotification = function(pesan) {
     .catch(() => addLog('ERR', 'Koneksi ke API Telegram terputus.'));
 };
 
-// ================= AUDIO SYNTHESIZER & SPEECH HELPER =================
+// ================= AUDIO SYNTHESIZER & SPEECH HELPER (ANTI KATA "PUKUL") =================
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 function playBeep(freq = 800, type = 'sine', duration = 0.1, vol = 0.05) {
     try {
@@ -103,15 +105,53 @@ function playBeep(freq = 800, type = 'sine', duration = 0.1, vol = 0.05) {
     } catch (e) {}
 }
 
+// Mengubah angka desimal (misal "12.40" atau "14.2") menjadi teks "12 koma 4"
+// sehingga TTS Bahasa Indonesia TIDAK PERNAH membacanya sebagai jam ("pukul 12.40")
+function formatAngkaSuara(nilai) {
+    let num = Number(nilai);
+    if (isNaN(num)) return String(nilai);
+    let bulat = Math.round(num * 10) / 10;
+    let teks  = bulat.toString();
+    if (teks.includes('.')) {
+        let bagian = teks.split('.');
+        if (bagian[1] === '0' || bagian[1] === '00') return bagian[0];
+        return `${bagian[0]} koma ${bagian[1]}`;
+    }
+    return teks;
+}
+
+// Sanitasi menyeluruh semua angka bertitik/titik dua di dalam kalimat suara AI
+function bersihkanTeksSuara(teks) {
+    if (!teks) return "";
+    return String(teks)
+        // Hapus ".00" atau ".0" jika bernilai bulat
+        .replace(/(\d+)\.0+\b/g, '$1')
+        // Ubah angka desimal "12.45" menjadi "12 koma 4 5" agar tidak pernah dibaca "pukul"
+        .replace(/(\d+)\.(\d+)/g, (match, p1, p2) => {
+            let desimal = p2.replace(/0+$/, '');
+            if (!desimal) return p1;
+            return `${p1} koma ${desimal.split('').join(' ')}`;
+        })
+        // Hilangkan kata "pukul" jika masih ada di kalimat
+        .replace(/\bpukul\b/gi, '');
+}
+
+let isSpeakingAI = false;
 function bicaraAI(teks, pitch = 1.05, rate = 0.98) {
     try {
         window.speechSynthesis.cancel();
-        let msg = new SpeechSynthesisUtterance(teks);
+        let teksBersih = bersihkanTeksSuara(teks);
+        let msg = new SpeechSynthesisUtterance(teksBersih);
         msg.lang = 'id-ID';
         msg.pitch = pitch;
         msg.rate = rate;
+        isSpeakingAI = true;
+        msg.onend = () => { isSpeakingAI = false; };
+        msg.onerror = () => { isSpeakingAI = false; };
         window.speechSynthesis.speak(msg);
-    } catch (e) {}
+    } catch (e) {
+        isSpeakingAI = false;
+    }
 }
 
 function addLog(tipe, pesan) {
@@ -123,29 +163,112 @@ function addLog(tipe, pesan) {
     term.scrollTop = term.scrollHeight;
 }
 
-// ================= 1. AI VOICE ASSISTANT (POMPA, CHARGING, TELEGRAM, & TELEMETRI) =================
-let aiListening = false;
-let aiTimeout;
+// ================= FUNGSI ANALISIS SEMUA SITUASI LENGKAP =================
+function buatAnalisaSituasiLengkap() {
+    let sV    = formatAngkaSuara(document.getElementById('top-solar-v')?.innerText || 0);
+    let sI    = formatAngkaSuara(document.getElementById('top-solar-i')?.innerText || 0);
+    let bV    = formatAngkaSuara(document.getElementById('top-batt-v')?.innerText || 0);
+    let bPct  = (document.getElementById('top-batt-pct')?.innerText || '92%').replace('%', ' persen');
+    let suhu  = formatAngkaSuara(document.getElementById('teks-suhu')?.innerText || 28);
+    let cuaca = document.getElementById('teks-cuaca')?.innerText || 'cerah';
+    let flow  = formatAngkaSuara(document.getElementById('yf-flowrate')?.innerText || 0);
+    let air   = formatAngkaSuara(currentWaterLevel);
+    let pred  = formatAngkaSuara(currentNextPred);
+
+    let trenKalimat = "stabil";
+    if (currentDeltaWater > 0) trenKalimat = `sedang naik sebesar ${formatAngkaSuara(currentDeltaWater)} sentimeter dengan prediksi mencapai ${pred} sentimeter`;
+    else if (currentDeltaWater < 0) trenKalimat = `sedang berangsur surut sebesar ${formatAngkaSuara(Math.abs(currentDeltaWater))} sentimeter`;
+
+    let mitigasiKalimat = relayCH1_Pump
+        ? `Pompa penguras sedang aktif bekerja dengan debit aliran ${flow} liter per menit.`
+        : `Pompa penguras dalam posisi siaga.`;
+
+    let dayaKalimat = `Tegangan panel surya ${sV} volt dengan arus ${sI} miliampere, sedangkan tegangan baterai ${bV} volt pada kapasitas ${bPct} menggunakan sumber pengisian ${relayCH4_Charge}.`;
+
+    let kesimpulan = "";
+    if (currentStatus === 'BAHAYA') {
+        kesimpulan = "Peringatan darurat! Situasi saat ini berstatus BAHAYA kritis, protokol pompa dan evakuasi sedang dijalankan.";
+    } else if (currentStatus === 'WASPADA') {
+        kesimpulan = "Perhatian, situasi saat ini berstatus SIAGA WASPADA, lampu peringatan oranye aktif dan harap pantau kenaikan air.";
+    } else {
+        kesimpulan = "Secara keseluruhan situasi lingkungan saat ini AMAN dan terkendali.";
+    }
+
+    return `${kesimpulan} Tinggi air terpantau ${air} sentimeter dan tren air ${trenKalimat}. Cuaca sekitar ${cuaca} dengan suhu ${suhu} derajat celcius. ${mitigasiKalimat} ${dayaKalimat}`;
+}
+
+// ================= 1. HANDS-FREE AI VOICE ASSISTANT (CUKUP PANGGIL TANPA KLIK) =================
+let handsFreeActive = true; // Default: Langsung aktif mendengarkan secara otomatis setelah login
+let aiListening     = false;
+let wakeWordWindow  = false; // Aktif beberapa detik setelah pengguna memanggil "Halo Aegis"
+let wakeTimer       = null;
+
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const recognition = SpeechRecognition ? new SpeechRecognition() : null;
+
+function mulaiHandsFreeAI() {
+    if (!recognition || !handsFreeActive) return;
+    try {
+        recognition.start();
+        aiListening = true;
+        const btn = document.getElementById('btn-ai');
+        const txt = document.getElementById('ai-text');
+        if (btn) btn.classList.add('listening');
+        if (txt) txt.innerText = 'AI STANDBY (PANGGIL "AEGIS")';
+    } catch (e) {}
+}
 
 if (recognition) {
     recognition.lang = 'id-ID';
     recognition.continuous = true;
     recognition.interimResults = false;
-    recognition.onresult = function(e) {
-        clearTimeout(aiTimeout);
-        const perintah = e.results[e.results.length - 1][0].transcript.toLowerCase().trim();
-        addLog('AI', `Suara Masuk: "${perintah}"`);
-        let jawaban = "Perintah suara belum dikenali. Silakan ucapkan nyalakan pompa, matikan pompa, ganti ke adaptor, ganti ke solar, kirim telegram, atau laporan sistem.";
 
-        if (perintah.includes('nyalakan pompa') || perintah.includes('hidupkan pompa') || perintah.includes('aktifkan pompa') || perintah.includes('pompa nyala') || perintah.includes('pompa on')) {
+    recognition.onresult = function(e) {
+        if (isSpeakingAI) return; // Abaikan pantulan suara speaker sendiri
+        const rawTranscript = e.results[e.results.length - 1][0].transcript.toLowerCase().trim();
+        if (!rawTranscript) return;
+
+        // Daftar kata pemicu panggilan (Wake Words) & kata kunci perintah langsung
+        const adaPanggilan = rawTranscript.includes('aegis') || rawTranscript.includes('ejis') || rawTranscript.includes('agis') || rawTranscript.includes('halo') || rawTranscript.includes('hai') || rawTranscript.includes('asisten') || rawTranscript.includes('komandan');
+        const adaPerintahLangsung = rawTranscript.includes('nyalakan') || rawTranscript.includes('hidupkan') || rawTranscript.includes('matikan') || rawTranscript.includes('hentikan') || rawTranscript.includes('ganti ke') || rawTranscript.includes('mode ') || rawTranscript.includes('situasi') || rawTranscript.includes('laporan') || rawTranscript.includes('status') || rawTranscript.includes('tinggi air') || rawTranscript.includes('tegangan') || rawTranscript.includes('baterai') || rawTranscript.includes('solar') || rawTranscript.includes('cuaca') || rawTranscript.includes('kirim telegram') || rawTranscript.includes('buka menu');
+
+        // Jika pengguna hanya memanggil "Halo Aegis" / "Aegis" tanpa perintah lanjutan
+        let bersihTanpaWake = rawTranscript
+            .replace(/\b(halo|hai|hei|ok|oke|tolong|aegis|ejis|agis|asisten|komandan)\b/gi, '')
+            .trim();
+
+        if (adaPanggilan && bersihTanpaWake.length < 3) {
+            wakeWordWindow = true;
+            if (wakeTimer) clearTimeout(wakeTimer);
+            wakeTimer = setTimeout(() => { wakeWordWindow = false; }, 12000);
+            playBeep(1400, 'sine', 0.12, 0.06);
+            addLog('AI', `🎙️ Panggilan Terdeteksi: "${rawTranscript}"`);
+            bicaraAI("Ya, saya mendengarkan. Silakan sebutkan perintah atau tanyakan situasi.");
+            return;
+        }
+
+        // Proses jika ada panggilan wake word, sedang dalam jendela panggil, atau kalimat perintah jelas
+        if (!adaPanggilan && !wakeWordWindow && !adaPerintahLangsung) {
+            return;
+        }
+
+        wakeWordWindow = false;
+        const perintah = rawTranscript;
+        addLog('AI', `Suara Masuk: "${perintah}"`);
+        let jawaban = "";
+
+        // --- A. MEMBACA SEMUA SITUASI / LAPORAN LENGKAP ---
+        if (perintah.includes('situasi') || perintah.includes('kondisi') || perintah.includes('laporan') || perintah.includes('sistem') || perintah.includes('analisa') || perintah.includes('semua') || perintah.includes('aman')) {
+            jawaban = buatAnalisaSituasiLengkap();
+        }
+        // --- B. KENDALI POMPA AIR (CH1) ---
+        else if (perintah.includes('nyalakan pompa') || perintah.includes('hidupkan pompa') || perintah.includes('aktifkan pompa') || perintah.includes('pompa nyala') || perintah.includes('pompa on')) {
             if (userRole !== 'developer') {
                 jawaban = "Maaf, akses ditolak. Hanya Developer yang dapat menyalakan pompa penguras.";
             } else {
                 relayCH1_Pump = false;
                 window.toggleRelayTest(1);
-                jawaban = "Siap. Perintah diterima. Menyalakan pompa penguras air pada jalur satu sekarang.";
+                jawaban = "Siap. Menyalakan pompa penguras air pada jalur satu sekarang.";
                 window.sendTelegramNotification(`🚰 [VOICE AI COMMAND]\nPompa Penguras (CH1) DINYALAKAN melalui perintah suara oleh ${userName}.\nTinggi Air: ${currentWaterLevel} cm`);
             }
         } else if (perintah.includes('matikan pompa') || perintah.includes('hentikan pompa') || perintah.includes('pompa mati') || perintah.includes('pompa off')) {
@@ -157,13 +280,15 @@ if (recognition) {
                 jawaban = "Siap. Pompa penguras air telah dimatikan dan kembali ke mode siaga.";
                 window.sendTelegramNotification(`✅ [VOICE AI COMMAND]\nPompa Penguras (CH1) DIMATIKAN melalui perintah suara oleh ${userName}.`);
             }
-        } else if (perintah.includes('adaptor') || perintah.includes('cas listrik') || perintah.includes('charger')) {
+        }
+        // --- C. GANTI MODE CHARGING (CH4: SOLAR / ADAPTOR) ---
+        else if (perintah.includes('adaptor') || perintah.includes('cas listrik') || perintah.includes('charger')) {
             if (userRole !== 'developer') {
                 jawaban = "Maaf, hanya Developer yang dapat mengubah sumber pengisian daya.";
             } else {
                 window.setATSMode(false);
                 window.toggleChargeMode('ADAPTOR');
-                jawaban = "Siap. Mengalihkan jalur pengisian daya baterai pada relay empat ke mode Adaptor D C.";
+                jawaban = "Siap. Mengalihkan jalur pengisian daya baterai ke mode Adaptor D C.";
                 window.sendTelegramNotification(`🔌 [VOICE AI COMMAND]\nSumber Pengisian (CH4) dialihkan ke ADAPTOR DC oleh ${userName}.`);
             }
         } else if (perintah.includes('mode solar') || perintah.includes('panel surya') || perintah.includes('pakai solar') || perintah.includes('ganti ke solar') || perintah.includes('tenaga surya')) {
@@ -171,7 +296,7 @@ if (recognition) {
                 jawaban = "Maaf, hanya Developer yang dapat mengubah sumber pengisian daya.";
             } else {
                 window.toggleChargeMode('SOLAR');
-                jawaban = "Siap. Mengalihkan jalur pengisian daya baterai pada relay empat ke mode Solar Panel.";
+                jawaban = "Siap. Mengalihkan jalur pengisian daya baterai ke mode Solar Panel.";
                 window.sendTelegramNotification(`☀️ [VOICE AI COMMAND]\nSumber Pengisian (CH4) dialihkan ke SOLAR PANEL oleh ${userName}.`);
             }
         } else if (perintah.includes('mode otomatis') || perintah.includes('ats otomatis')) {
@@ -179,9 +304,39 @@ if (recognition) {
                 jawaban = "Maaf, hanya Developer yang dapat mengatur sistem A T S.";
             } else {
                 window.setATSMode(true);
-                jawaban = "Mode Smart A T S otomatis diaktifkan. Sistem akan otomatis berpindah ke adaptor jika tegangan aki turun di bawah tujuh volt.";
+                jawaban = "Mode Smart A T S otomatis diaktifkan. Sistem akan otomatis berpindah ke adaptor jika tegangan aki turun di bawah 7 volt.";
             }
-        } else if (perintah.includes('telegram') || perintah.includes('kirim pesan')) {
+        }
+        // --- D. PINDAH SUB-MENU DENGAN SUARA ---
+        else if (perintah.includes('menu daya') || perintah.includes('grafik daya') || perintah.includes('halaman daya')) {
+            window.switchSubMenu('power');
+            jawaban = "Membuka tampilan telemetri daya dan Smart A T S.";
+        } else if (perintah.includes('menu database') || perintah.includes('menu riwayat') || perintah.includes('tabel penuh')) {
+            window.switchSubMenu('logs');
+            jawaban = "Membuka tampilan database riwayat lengkap.";
+        } else if (perintah.includes('menu utama') || perintah.includes('dashboard utama') || perintah.includes('overview')) {
+            window.switchSubMenu('overview');
+            jawaban = "Kembali ke tampilan dashboard utama.";
+        }
+        // --- E. KENDALI ARAH SERVO KAMERA DENGAN SUARA ---
+        else if (perintah.includes('kamera kiri') || perintah.includes('geser kiri')) {
+            window.moveCam('left');
+            jawaban = "Menggerakkan kamera ke kiri.";
+        } else if (perintah.includes('kamera kanan') || perintah.includes('geser kanan')) {
+            window.moveCam('right');
+            jawaban = "Menggerakkan kamera ke kanan.";
+        } else if (perintah.includes('kamera atas') || perintah.includes('arah atas')) {
+            window.moveCam('up');
+            jawaban = "Menggerakkan kamera ke atas.";
+        } else if (perintah.includes('kamera bawah') || perintah.includes('arah bawah')) {
+            window.moveCam('down');
+            jawaban = "Menggerakkan kamera ke bawah.";
+        } else if (perintah.includes('kamera tengah') || perintah.includes('reset kamera')) {
+            window.moveCam('center');
+            jawaban = "Mengembalikan posisi kamera ke tengah.";
+        }
+        // --- F. KIRIM LAPORAN KE TELEGRAM ---
+        else if (perintah.includes('telegram') || perintah.includes('kirim pesan')) {
             let sV = document.getElementById('top-solar-v')?.innerText || '0.00';
             let bV = document.getElementById('top-batt-v')?.innerText || '0.00';
             window.sendTelegramNotification(
@@ -192,8 +347,10 @@ if (recognition) {
                 `Solar: ${sV} V | Baterai: ${bV} V\n` +
                 `Mode Charge (CH4): ${relayCH4_Charge}`
             );
-            jawaban = "Siap. Laporan status dan telemetri daya telah dikirimkan ke aplikasi Telegram Anda.";
-        } else if (perintah.includes('nyalakan lampu waspada') || perintah.includes('hidupkan lampu waspada')) {
+            jawaban = "Siap. Laporan situasi lengkap telah dikirimkan ke Telegram Anda.";
+        }
+        // --- G. KENDALI LAMPU WASPADA (CH3), ALARM (CH2), & FLASH KAMERA ---
+        else if (perintah.includes('nyalakan lampu waspada') || perintah.includes('hidupkan lampu waspada')) {
             if (userRole === 'developer') {
                 relayCH3_Lamp = false; window.toggleRelayTest(3);
                 jawaban = "Lampu oranye tanda waspada telah dinyalakan.";
@@ -217,62 +374,74 @@ if (recognition) {
             } else {
                 jawaban = "Akses lampu flash kamera hanya untuk Developer.";
             }
-        } else if (perintah.includes('air') || perintah.includes('banjir') || perintah.includes('siaga')) {
-            jawaban = `Tinggi genangan air saat ini ${currentWaterLevel} sentimeter dengan status lingkungan ${currentStatus}.`;
+        }
+        // --- H. PERTANYAAN SPESIFIK SENSOR (TANPA KATA "PUKUL") ---
+        else if (perintah.includes('air') || perintah.includes('banjir') || perintah.includes('siaga')) {
+            jawaban = `Tinggi genangan air saat ini ${formatAngkaSuara(currentWaterLevel)} sentimeter dengan status lingkungan ${currentStatus}. Prediksi selanjutnya ${formatAngkaSuara(currentNextPred)} sentimeter.`;
         } else if (perintah.includes('cuaca')) {
-            jawaban = `Pemindaian cuaca di Kalideres saat ini menunjukkan kondisi ${document.getElementById('teks-cuaca')?.innerText || 'cerah'}.`;
+            jawaban = `Pemindaian cuaca di Kalideres saat ini menunjukkan kondisi ${document.getElementById('teks-cuaca')?.innerText || 'cerah'} dengan suhu ${formatAngkaSuara(document.getElementById('teks-suhu')?.innerText || 28)} derajat celcius.`;
         } else if (perintah.includes('pompa') || perintah.includes('flow') || perintah.includes('debit')) {
-            jawaban = `Pompa penguras berstatus ${relayCH1_Pump ? 'menyala' : 'siaga'} dengan debit aliran ${document.getElementById('yf-flowrate')?.innerText || '0'} liter per menit.`;
+            jawaban = `Pompa penguras berstatus ${relayCH1_Pump ? 'menyala aktif' : 'siaga'} dengan debit aliran ${formatAngkaSuara(document.getElementById('yf-flowrate')?.innerText || 0)} liter per menit.`;
         } else if (perintah.includes('suhu')) {
-            jawaban = `Suhu lingkungan saat ini berada di angka ${document.getElementById('teks-suhu')?.innerText || '28'} derajat celcius.`;
+            jawaban = `Suhu lingkungan saat ini berada di angka ${formatAngkaSuara(document.getElementById('teks-suhu')?.innerText || 28)} derajat celcius.`;
         } else if (perintah.includes('solar')) {
-            jawaban = `Tegangan panel surya saat ini ${document.getElementById('top-solar-v')?.innerText || '0'} volt dengan arus ${document.getElementById('top-solar-i')?.innerText || '0'} miliampere.`;
-        } else if (perintah.includes('baterai') || perintah.includes('aki') || perintah.includes('daya')) {
-            jawaban = `Status daya baterai ${document.getElementById('txt-batt')?.innerText || 'normal'}. Sumber pengisian aktif saat ini menggunakan ${relayCH4_Charge}.`;
+            let sV = formatAngkaSuara(document.getElementById('top-solar-v')?.innerText || 0);
+            let sI = formatAngkaSuara(document.getElementById('top-solar-i')?.innerText || 0);
+            jawaban = `Tegangan panel surya saat ini ${sV} volt dengan arus ${sI} miliampere.`;
+        } else if (perintah.includes('baterai') || perintah.includes('aki') || perintah.includes('daya') || perintah.includes('tegangan')) {
+            let bV   = formatAngkaSuara(document.getElementById('top-batt-v')?.innerText || 0);
+            let bI   = formatAngkaSuara(document.getElementById('top-batt-i')?.innerText || 0);
+            let bPct = (document.getElementById('top-batt-pct')?.innerText || '92%').replace('%', ' persen');
+            jawaban = `Tegangan baterai saat ini ${bV} volt dengan arus ${bI} miliampere dan kapasitas ${bPct}. Sumber pengisian aktif menggunakan ${relayCH4_Charge}.`;
         } else if (perintah.includes('sinyal') || perintah.includes('lora')) {
-            jawaban = `Kekuatan sinyal radio LoRa terpantau pada ${document.getElementById('txt-lora')?.innerText || '-78 dBm'}.`;
-        } else if (perintah.includes('laporan') || perintah.includes('sistem')) {
-            jawaban = `Laporan sistem pintar A.E.G.I.S: Status ${currentStatus}, tinggi air ${currentWaterLevel} sentimeter, suhu ${document.getElementById('teks-suhu')?.innerText || '28'} derajat, tegangan baterai ${document.getElementById('top-batt-v')?.innerText || '12'} volt dengan mode pengisian ${relayCH4_Charge}.`;
+            jawaban = `Kekuatan sinyal radio LoRa terpantau pada ${document.getElementById('txt-lora')?.innerText || 'minus 78 dBm'}.`;
+        } else if (adaPanggilan) {
+            jawaban = buatAnalisaSituasiLengkap();
         }
 
-        addLog('AI', `Suara Keluar: "${jawaban}"`);
-        bicaraAI(jawaban);
-        recognition.stop();
+        if (jawaban !== "") {
+            addLog('AI', `Suara Keluar: "${jawaban}"`);
+            bicaraAI(jawaban);
+        }
     };
-    recognition.onstart = function() {
-        aiTimeout = setTimeout(() => {
-            if (aiListening) {
-                addLog('AI', 'Sesi dengar AI selesai (Timeout).');
-                window.toggleVoiceAI(true);
-            }
-        }, 7500);
+
+    // Otomatis menyambung kembali mikrofon jika dihentikan oleh browser (Hands-Free Always-On)
+    recognition.onend = function() {
+        if (handsFreeActive && systemBooted) {
+            setTimeout(() => {
+                try { recognition.start(); } catch (e) {}
+            }, 300);
+        }
     };
-    recognition.onerror = function() { window.toggleVoiceAI(true); };
-    recognition.onend = function() { if (aiListening) window.toggleVoiceAI(true); };
+    recognition.onerror = function() {
+        if (handsFreeActive && systemBooted) {
+            setTimeout(() => {
+                try { recognition.start(); } catch (e) {}
+            }, 1000);
+        }
+    };
 }
 
-window.toggleVoiceAI = function(forceOff = false) {
+// Tombol AI di header berfungsi untuk mengaktifkan/menonaktifkan mode Hands-Free
+window.toggleVoiceAI = function() {
     if (!recognition) {
         alert("Browser Anda belum mendukung fitur suara Web Speech API. Gunakan Google Chrome atau Edge.");
         return;
     }
     let btn = document.getElementById('btn-ai');
     let txt = document.getElementById('ai-text');
-    try {
-        if (aiListening || forceOff) {
-            recognition.stop();
-            clearTimeout(aiTimeout);
-            aiListening = false;
-            if (btn) btn.classList.remove('listening');
-            if (txt) txt.innerText = "AI ASSISTANT";
-        } else {
-            recognition.start();
-            aiListening = true;
-            if (btn) btn.classList.add('listening');
-            if (txt) txt.innerText = "MENDENGARKAN...";
-            bicaraAI("Asisten pintar aktif, silakan ucapkan perintah.");
-        }
-    } catch (e) {}
+    handsFreeActive = !handsFreeActive;
+    if (handsFreeActive) {
+        mulaiHandsFreeAI();
+        if (btn) btn.classList.add('listening');
+        if (txt) txt.innerText = 'AI STANDBY (PANGGIL "AEGIS")';
+        bicaraAI("Mode asisten tangan bebas aktif. Cukup panggil Aegis kapan saja.");
+    } else {
+        try { recognition.stop(); } catch (e) {}
+        aiListening = false;
+        if (btn) btn.classList.remove('listening');
+        if (txt) txt.innerText = "AI MIC MUTED";
+    }
 };
 
 // ================= 2. YOLOv10n AI DETECTION =================
@@ -309,7 +478,7 @@ window.toggleYolo = function() {
     }
 };
 
-// ================= 3. KONTROL DASHBOARD, SIMULASI, SERVO & RELAY (100% VIA FIREBASE HTTPS) =================
+// ================= 3. KONTROL DASHBOARD, SIMULASI, SERVO & RELAY (100% CLOUD FIREBASE) =================
 window.switchSubMenu = function(menuName) {
     const vOver  = document.getElementById('view-overview');
     const vPower = document.getElementById('view-power');
@@ -435,7 +604,6 @@ window.simulateBatteryVoltage = function(simBattV) {
     addLog('PWR', `🧪 Simulasi Tegangan Aki: ${simBattV.toFixed(2)}V -> Mode Charge: ${newChg}`);
 };
 
-// Kontrol Servo Murni via Cloud Firebase (Tanpa fetch lokal agar bebas CORS)
 window.moveCam = function(direction) {
     if (userRole !== 'developer') return;
     if (direction === 'left')   cloudPanAngle  = Math.min(180, cloudPanAngle + SERVO_STEP);
@@ -513,7 +681,6 @@ function updateRelayButtonsUI() {
     }
 }
 
-// Kontrol Relay 4-Channel Murni via Cloud Firebase (Bebas Error CORS)
 window.toggleRelayTest = function(channel) {
     if (userRole !== 'developer') return;
     if (channel === 1) {
@@ -576,7 +743,7 @@ window.toggleFlashLED = function(customAction = 'flash') {
     }
     setText('cam-flash-badge', lvlText);
     database.ref('kontrol').update({ cam_flash: localFlashStep });
-    addLog('CAM', `💡 Lampu Flash ESP32-CAM diatur ke: ${lvlText}`);
+    addLog('CAM', `💡 Lampu Flash ESP32-CAM diatur via Cloud ke: ${lvlText}`);
 };
 
 window.adjustZoom = function(delta) {
@@ -602,8 +769,7 @@ window.toggleCamFit = function() {
 
 window.changeCamIPPrompt = function() {
     if (userRole !== 'developer') return;
-    let currentIP = ESPCAM_IP.replace('http://', '');
-    let inputIP = prompt("Masukkan IP ESP32-CAM Anda (contoh: 10.78.168.1):", currentIP);
+    let inputIP = prompt("Opsional (Kosongkan untuk memakai Cloud Base64 Firebase, atau isi IP lokal jika satu jaringan):", "");
     if (inputIP && inputIP.trim() !== "") {
         let cleanIP = inputIP.replace('http://', '').replace(':81/stream', '').trim();
         ESPCAM_IP = `http://${cleanIP}`;
@@ -611,7 +777,10 @@ window.changeCamIPPrompt = function() {
         const camEl = document.getElementById('espcam-stream');
         if (camEl) camEl.src = `${ESPCAM_IP}:81/stream`;
         setText('cam-ip-label', `${cleanIP}:81`);
-        addLog('CAM', `Streaming kamera diarahkan ke ${ESPCAM_IP}:81/stream`);
+    } else {
+        localStorage.removeItem('aegis_cam_ip');
+        ESPCAM_IP = "";
+        setText('cam-ip-label', 'FIREBASE CLOUD CAM');
     }
 };
 
@@ -664,7 +833,7 @@ document.getElementById('pass-input')?.addEventListener('keypress', function(e) 
 });
 
 window.verifyLogin = function() {
-    let rawName = document.getElementById('user-name')?.value.trim() || "User";
+    let rawName = document.getElementById('user-name')?.value.trim() || "Operator";
     let pass    = document.getElementById('pass-input')?.value.toLowerCase().trim() || "";
 
     if (pass === 'admin' || pass === 'dev2026' || pass === 'aegis2026') {
@@ -738,8 +907,8 @@ function startBootSequence() {
     const messages = [
         `> OTORISASI BERHASIL: ${userName.toUpperCase()} [${userRole.toUpperCase()}]`,
         "> MENGHUBUNGKAN KE FIREBASE REALTIME CLOUD & TELEGRAM BOT...",
-        "> MENGKALIBRASI DUAL INA219, SMART ATS (<7V) & VOICE AI...",
-        "> MENGAKTIFKAN STREAMING ESP32-CAM & GEOSPATIAL MAP...",
+        "> MENGAKTIFKAN HANDS-FREE AI VOICE STANDBY & CLOUD CAM...",
+        "> MENGKALIBRASI DUAL INA219 & SMART ATS (<7V)...",
         "> SISTEM A.E.G.I.S SMART CLOUD SIAP."
     ];
     let i = 0;
@@ -760,18 +929,18 @@ function startBootSequence() {
                     setTimeout(() => {
                         if (dCore) dCore.style.opacity = '1';
                         systemBooted = true;
-                        const camImg = document.getElementById('espcam-stream');
-                        if (camImg) camImg.src = `${ESPCAM_IP}:81/stream`;
-                        setText('cam-ip-label', `${ESPCAM_IP.replace('http://', '')}:81`);
+                        setText('cam-ip-label', 'FIREBASE CLOUD CAM');
                         initMapsAndCharts();
                         startFirebaseListeners();
                         renderFluid();
                         simulatePCB();
+                        mulaiHandsFreeAI();
+                        bicaraAI(`Selamat datang ${userName}. Sistem pemantauan pintar Aegis aktif. Cukup panggil Aegis kapan saja untuk perintah suara.`);
                     }, 100);
-                }, 600);
-            }, 350);
+                }, 500);
+            }, 250);
         }
-    }, 300);
+    }, 250);
 }
 
 let isLightMode = false;
@@ -865,18 +1034,18 @@ function drawRain() {
     if (isRaining) requestAnimationFrame(drawRain);
 }
 
-// ================= NOTIFIKASI SUARA OTOMATIS (MODE SIAGA / WASPADA & BAHAYA) =================
+// ================= NOTIFIKASI SUARA OTOMATIS SEMUA SITUASI =================
 function playVoiceAlarm(status) {
     if (status === 'BAHAYA' && !alarmPlaying) {
         playBeep(2000, 'square', 0.5, 0.12);
-        bicaraAI(`Peringatan kritis! Tinggi air mencapai ${currentWaterLevel} sentimeter dan melewati batas bahaya. Menjalankan protokol pompa penguras dan rute evakuasi sekarang!`);
+        bicaraAI(`Peringatan kritis! Tinggi air mencapai ${formatAngkaSuara(currentWaterLevel)} sentimeter dan melewati batas bahaya. Menjalankan protokol pompa penguras dan rute evakuasi sekarang!`);
         alarmPlaying = true;
         waspadaPlaying = false;
         addLog('AI', '🔊 ALARM SUARA: Status BAHAYA diumumkan.');
     } else if (status === 'WASPADA' && !waspadaPlaying) {
         playBeep(1200, 'triangle', 0.35, 0.1);
         setTimeout(() => playBeep(1500, 'triangle', 0.35, 0.1), 400);
-        bicaraAI(`Perhatian! Status lingkungan memasuki mode siaga waspada pada ketinggian air ${currentWaterLevel} sentimeter. Lampu peringatan oranye telah diaktifkan.`);
+        bicaraAI(`Perhatian! Status lingkungan memasuki mode siaga waspada pada ketinggian air ${formatAngkaSuara(currentWaterLevel)} sentimeter. Lampu peringatan oranye telah diaktifkan.`);
         waspadaPlaying = true;
         alarmPlaying = false;
         addLog('AI', '🔊 MODE SUARA SIAGA: Status WASPADA diumumkan.');
@@ -924,19 +1093,6 @@ if (cmdInputEl) {
                 window.toggleFlashLED('flash_on');
             } else if (cmd === 'flash off') {
                 window.toggleFlashLED('flash_off');
-            } else if (cmd.startsWith('setcam ')) {
-                let ipBaru = cmd.replace('setcam ', '').trim();
-                ESPCAM_IP = `http://${ipBaru}`;
-                localStorage.setItem('aegis_cam_ip', ESPCAM_IP);
-                const camEl = document.getElementById('espcam-stream');
-                if (camEl) camEl.src = `${ESPCAM_IP}:81/stream`;
-                setText('cam-ip-label', `${ipBaru}:81`);
-                addLog('CAM', `IP Kamera diubah ke: ${ESPCAM_IP}`);
-            } else if (cmd.startsWith('setservo ')) {
-                let ipServo = cmd.replace('setservo ', '').trim();
-                ESPMAIN_IP = `http://${ipServo}`;
-                localStorage.setItem('aegis_main_ip', ESPMAIN_IP);
-                addLog('SRV', `IP ESP32 Utama diubah ke: ${ESPMAIN_IP}`);
             } else {
                 addLog('ERR', `Perintah '${cmd}' tidak dikenali.`);
             }
@@ -1035,7 +1191,7 @@ function initMapsAndCharts() {
     });
 
     fetchWeather();
-    setInterval(fetchWeather, 300000);
+    setInterval(fetchWeather, 180000);
 }
 
 async function fetchWeather() {
@@ -1052,7 +1208,19 @@ async function fetchWeather() {
     } catch (e) {}
 }
 
+// ================= LISTENER REALTIME FIREBASE (KAMERA, KONTROL, & SENSOR) =================
 function startFirebaseListeners() {
+    // 1. Listener Live Stream Kamera Base64 dari Firebase (Bisa Diakses Online dari Mana Saja)
+    database.ref('kamera').on('value', (snap) => {
+        let camData = snap.val();
+        if (camData && camData.frame) {
+            const camEl = document.getElementById('espcam-stream');
+            if (camEl) camEl.src = camData.frame;
+            setText('cam-ip-label', 'CLOUD CAM LIVE');
+        }
+    });
+
+    // 2. Listener Kontrol Relay, ATS & Lampu Flash Kamera
     database.ref('kontrol').on('value', (snapshot) => {
         let ctrl = snapshot.val() || {};
         relayCH1_Pump   = (ctrl.pompa === "ON" || ctrl.pompa === "MENYALA");
@@ -1063,15 +1231,17 @@ function startFirebaseListeners() {
             isAutoATS = (ctrl.ats_mode === "AUTO");
         }
 
-        if (ctrl.cam_ip && ctrl.cam_ip !== "") {
-            let newCam = `http://${ctrl.cam_ip}`;
-            if (ESPCAM_IP !== newCam) {
-                ESPCAM_IP = newCam;
-                localStorage.setItem('aegis_cam_ip', ESPCAM_IP);
-                const camEl = document.getElementById('espcam-stream');
-                if (camEl) camEl.src = `${ESPCAM_IP}:81/stream`;
-                setText('cam-ip-label', `${ctrl.cam_ip}:81`);
+        if (ctrl.cam_flash !== undefined) {
+            localFlashStep = Number(ctrl.cam_flash);
+            const levels = ['OFF', 'LOW (30%)', 'MED (60%)', 'MAX (100%)'];
+            const lvlText = levels[localFlashStep] || 'OFF';
+            const btnFlash = document.getElementById('btn-flash');
+            if (btnFlash) {
+                btnFlash.innerText = `💡 FLASH: ${lvlText}`;
+                btnFlash.style.background = localFlashStep > 0 ? '#facc15' : 'transparent';
+                btnFlash.style.color = localFlashStep > 0 ? '#000' : '#facc15';
             }
+            setText('cam-flash-badge', lvlText);
         }
 
         isPumpActive = relayCH1_Pump;
@@ -1090,6 +1260,7 @@ function startFirebaseListeners() {
         updateRelayButtonsUI();
     });
 
+    // 3. Listener Telemetri Sensor Real-Time
     database.ref('sensor/logs').limitToLast(20).on('value', (snapshot) => {
         globalHistory = [];
         snapshot.forEach(child => { globalHistory.push(child.val()); });
@@ -1097,15 +1268,6 @@ function startFirebaseListeners() {
             let data = globalHistory[globalHistory.length - 1];
             currentWaterLevel = Number(data.water_level ?? 0);
             currentStatus = data.status ?? "AMAN";
-
-            if (data.node_ip && data.node_ip !== "") {
-                let detectedIP = `http://${data.node_ip}`;
-                if (ESPMAIN_IP !== detectedIP) {
-                    ESPMAIN_IP = detectedIP;
-                    localStorage.setItem('aegis_main_ip', ESPMAIN_IP);
-                    addLog('SYS', `Node ESP32 Utama aktif di: ${data.node_ip} (Cloud Sync Aktif)`);
-                }
-            }
 
             setText('teks-air', currentWaterLevel);
             setText('top-jarak', Number(data.distance_cm ?? Math.max(0, 150 - currentWaterLevel)).toFixed(1));
@@ -1164,12 +1326,12 @@ function startFirebaseListeners() {
                 if (numBattV < ATS_CUTOVER_V && relayCH4_Charge !== "ADAPTOR") {
                     window.toggleChargeMode("ADAPTOR");
                     playBeep(1600, 'sawtooth', 0.4, 0.12);
-                    bicaraAI(`Peringatan daya. Tegangan baterai turun ke ${bV} volt. Sistem Smart A T S otomatis mengalihkan pengisian ke Adaptor.`);
+                    bicaraAI(`Peringatan daya. Tegangan baterai turun ke ${formatAngkaSuara(bV)} volt. Sistem Smart A T S otomatis mengalihkan pengisian ke Adaptor.`);
                     addLog('PWR', `⚠️ SMART ATS: Tegangan Aki turun ke ${bV}V (< 7.0V)! Otomatis pindah ke ADAPTOR (CH4 ON).`);
                     window.sendTelegramNotification(`⚡ [SMART ATS CUTOVER]\nTegangan Aki turun ke ${bV}V (< 7.0V)!\nRelay CH4 otomatis memindahkan sumber pengisian ke ADAPTOR DC.`);
                 } else if (numBattV >= ATS_RECOVER_V && relayCH4_Charge === "ADAPTOR") {
                     window.toggleChargeMode("SOLAR");
-                    bicaraAI(`Informasi daya. Tegangan baterai telah pulih ke ${bV} volt. Pengisian dikembalikan ke mode Solar Panel.`);
+                    bicaraAI(`Informasi daya. Tegangan baterai telah pulih ke ${formatAngkaSuara(bV)} volt. Pengisian dikembalikan ke mode Solar Panel.`);
                     addLog('PWR', `☀️ SMART ATS: Tegangan Aki pulih ke ${bV}V (>= 8.0V). Kembali ke SOLAR PANEL (CH4 OFF).`);
                     window.sendTelegramNotification(`☀️ [SMART ATS RECOVERY]\nTegangan Aki pulih ke ${bV}V (>= 8.0V).\nRelay CH4 kembali menggunakan SOLAR PANEL.`);
                 }
@@ -1185,14 +1347,19 @@ function startFirebaseListeners() {
             if (document.getElementById('bar-lora')) document.getElementById('bar-lora').style.width = `${Math.max(10, Math.min(100, 130 + Number(lRssi)))}%`;
 
             let prevWater = globalHistory.length >= 2 ? Number(globalHistory[globalHistory.length - 2].water_level ?? 0) : currentWaterLevel;
-            let deltaWater = Number((currentWaterLevel - prevWater).toFixed(1));
-            let nextPred = Math.max(0, Number((currentWaterLevel + deltaWater).toFixed(1)));
-            setText('top-ai-pred', nextPred.toFixed(1));
+            currentDeltaWater = Number((currentWaterLevel - prevWater).toFixed(1));
+            currentNextPred   = Math.max(0, Number((currentWaterLevel + currentDeltaWater).toFixed(1)));
+            setText('top-ai-pred', currentNextPred.toFixed(1));
             const trEl = document.getElementById('top-ai-trend');
             if (trEl) {
-                if (deltaWater > 0) { trEl.innerText = `▲ NAIK (+${deltaWater} cm)`; trEl.style.color = "var(--bahaya)"; }
-                else if (deltaWater < 0) { trEl.innerText = `▼ SURUT (${deltaWater} cm)`; trEl.style.color = "var(--aman)"; }
+                if (currentDeltaWater > 0) { trEl.innerText = `▲ NAIK (+${currentDeltaWater} cm)`; trEl.style.color = "var(--bahaya)"; }
+                else if (currentDeltaWater < 0) { trEl.innerText = `▼ SURUT (${currentDeltaWater} cm)`; trEl.style.color = "var(--aman)"; }
                 else { trEl.innerText = `● STABIL (0.0 cm)`; trEl.style.color = "var(--primary)"; }
+            }
+
+            // Peringatan suara otomatis jika air melonjak cepat (>= 15 cm dalam satu siklus) meski belum mencapai status bahaya
+            if (systemBooted && currentDeltaWater >= 15 && data.status === 'AMAN') {
+                bicaraAI(`Perhatian, terdeteksi kenaikan air cukup cepat sebesar ${formatAngkaSuara(currentDeltaWater)} sentimeter.`);
             }
 
             if (data.status === 'BAHAYA' && !isEvacActive) {
@@ -1225,7 +1392,7 @@ function startFirebaseListeners() {
                     );
                 } else if ((previousStatus === 'BAHAYA' || previousStatus === 'WASPADA') && data.status === 'AMAN') {
                     playBeep(1000, 'sine', 0.4, 0.1);
-                    bicaraAI("Perhatian. Genangan air telah surut. Kondisi lingkungan kembali aman.");
+                    bicaraAI(`Perhatian. Genangan air telah surut ke ${formatAngkaSuara(currentWaterLevel)} sentimeter. Situasi lingkungan kembali aman.`);
                     addLog('SYS', '🔈 NOTIFIKASI SUARA: KONDISI KEMBALI AMAN.');
                     window.sendTelegramNotification(
                         `✅ [KONDISI KEMBALI AMAN]\n` +
