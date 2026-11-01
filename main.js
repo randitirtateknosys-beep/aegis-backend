@@ -15,10 +15,6 @@ const database = firebase.database();
 const TELEGRAM_BOT_TOKEN = "8747686027:AAHv-CpXhgpM7EvPYFdjh_vSkF6CKLVt_6Q";
 const TELEGRAM_CHAT_ID   = "8233815181";
 
-// Deteksi apakah web dibuka lewat HTTPS (GitHub Pages) atau HTTP Lokal
-const IS_HTTPS_HOST = (window.location.protocol === 'https:');
-
-// Helper anti-null agar UI selalu aman
 function setText(id, val) {
     const el = document.getElementById(id);
     if (el) el.innerText = val;
@@ -77,15 +73,10 @@ window.sendTelegramNotification = function(pesan) {
     })
     .then(res => res.json())
     .then(data => {
-        if (data.ok) {
-            addLog('NET', '📲 Notifikasi Telegram berhasil dikirim ke HP.');
-        } else {
-            addLog('ERR', 'Gagal mengirim notifikasi Telegram.');
-        }
+        if (data.ok) addLog('NET', '📲 Notifikasi Telegram terkirim ke HP.');
+        else addLog('ERR', 'Gagal mengirim notifikasi Telegram.');
     })
-    .catch(() => {
-        addLog('ERR', 'Koneksi ke API Telegram terputus.');
-    });
+    .catch(() => addLog('ERR', 'Koneksi ke API Telegram terputus.'));
 };
 
 // ================= AUDIO SYNTHESIZER & SPEECH HELPER =================
@@ -132,13 +123,6 @@ function addLog(tipe, pesan) {
     term.scrollTop = term.scrollHeight;
 }
 
-// Helper pengiriman perintah lokal yang aman dari blokir CORS HTTPS
-function sendLocalCommandIfAllowed(url) {
-    if (!IS_HTTPS_HOST && url) {
-        fetch(url, { mode: 'no-cors' }).catch(() => {});
-    }
-}
-
 // ================= 1. AI VOICE ASSISTANT (POMPA, CHARGING, TELEGRAM, & TELEMETRI) =================
 let aiListening = false;
 let aiTimeout;
@@ -155,7 +139,6 @@ if (recognition) {
         addLog('AI', `Suara Masuk: "${perintah}"`);
         let jawaban = "Perintah suara belum dikenali. Silakan ucapkan nyalakan pompa, matikan pompa, ganti ke adaptor, ganti ke solar, kirim telegram, atau laporan sistem.";
 
-        // --- A. PERINTAH SUARA MENYALAKAN / MEMATIKAN POMPA (CH1) ---
         if (perintah.includes('nyalakan pompa') || perintah.includes('hidupkan pompa') || perintah.includes('aktifkan pompa') || perintah.includes('pompa nyala') || perintah.includes('pompa on')) {
             if (userRole !== 'developer') {
                 jawaban = "Maaf, akses ditolak. Hanya Developer yang dapat menyalakan pompa penguras.";
@@ -174,9 +157,7 @@ if (recognition) {
                 jawaban = "Siap. Pompa penguras air telah dimatikan dan kembali ke mode siaga.";
                 window.sendTelegramNotification(`✅ [VOICE AI COMMAND]\nPompa Penguras (CH1) DIMATIKAN melalui perintah suara oleh ${userName}.`);
             }
-        }
-        // --- B. PERINTAH SUARA MENGGANTI MODE CHARGING (CH4: SOLAR / ADAPTOR) ---
-        else if (perintah.includes('adaptor') || perintah.includes('cas listrik') || perintah.includes('charger')) {
+        } else if (perintah.includes('adaptor') || perintah.includes('cas listrik') || perintah.includes('charger')) {
             if (userRole !== 'developer') {
                 jawaban = "Maaf, hanya Developer yang dapat mengubah sumber pengisian daya.";
             } else {
@@ -200,9 +181,7 @@ if (recognition) {
                 window.setATSMode(true);
                 jawaban = "Mode Smart A T S otomatis diaktifkan. Sistem akan otomatis berpindah ke adaptor jika tegangan aki turun di bawah tujuh volt.";
             }
-        }
-        // --- C. PERINTAH SUARA KIRIM LAPORAN TELEGRAM ---
-        else if (perintah.includes('telegram') || perintah.includes('kirim pesan')) {
+        } else if (perintah.includes('telegram') || perintah.includes('kirim pesan')) {
             let sV = document.getElementById('top-solar-v')?.innerText || '0.00';
             let bV = document.getElementById('top-batt-v')?.innerText || '0.00';
             window.sendTelegramNotification(
@@ -214,9 +193,7 @@ if (recognition) {
                 `Mode Charge (CH4): ${relayCH4_Charge}`
             );
             jawaban = "Siap. Laporan status dan telemetri daya telah dikirimkan ke aplikasi Telegram Anda.";
-        }
-        // --- D. PERINTAH SUARA LAMPU WASPADA (CH3), ALARM (CH2), & FLASH KAMERA ---
-        else if (perintah.includes('nyalakan lampu waspada') || perintah.includes('hidupkan lampu waspada')) {
+        } else if (perintah.includes('nyalakan lampu waspada') || perintah.includes('hidupkan lampu waspada')) {
             if (userRole === 'developer') {
                 relayCH3_Lamp = false; window.toggleRelayTest(3);
                 jawaban = "Lampu oranye tanda waspada telah dinyalakan.";
@@ -240,9 +217,7 @@ if (recognition) {
             } else {
                 jawaban = "Akses lampu flash kamera hanya untuk Developer.";
             }
-        }
-        // --- E. PERTANYAAN STATUS & TELEMETRI ---
-        else if (perintah.includes('air') || perintah.includes('banjir') || perintah.includes('siaga')) {
+        } else if (perintah.includes('air') || perintah.includes('banjir') || perintah.includes('siaga')) {
             jawaban = `Tinggi genangan air saat ini ${currentWaterLevel} sentimeter dengan status lingkungan ${currentStatus}.`;
         } else if (perintah.includes('cuaca')) {
             jawaban = `Pemindaian cuaca di Kalideres saat ini menunjukkan kondisi ${document.getElementById('teks-cuaca')?.innerText || 'cerah'}.`;
@@ -334,7 +309,7 @@ window.toggleYolo = function() {
     }
 };
 
-// ================= 3. FUNGSI KONTROL DASHBOARD, SIMULASI & RELAY (100% CLOUD FIREBASE) =================
+// ================= 3. KONTROL DASHBOARD, SIMULASI, SERVO & RELAY (100% VIA FIREBASE HTTPS) =================
 window.switchSubMenu = function(menuName) {
     const vOver  = document.getElementById('view-overview');
     const vPower = document.getElementById('view-power');
@@ -460,7 +435,7 @@ window.simulateBatteryVoltage = function(simBattV) {
     addLog('PWR', `🧪 Simulasi Tegangan Aki: ${simBattV.toFixed(2)}V -> Mode Charge: ${newChg}`);
 };
 
-// Kontrol Servo via Cloud Firebase (Bebas Error CORS)
+// Kontrol Servo Murni via Cloud Firebase (Tanpa fetch lokal agar bebas CORS)
 window.moveCam = function(direction) {
     if (userRole !== 'developer') return;
     if (direction === 'left')   cloudPanAngle  = Math.min(180, cloudPanAngle + SERVO_STEP);
@@ -470,9 +445,6 @@ window.moveCam = function(direction) {
     if (direction === 'center') { cloudPanAngle = 90; cloudTiltAngle = 90; }
 
     database.ref('kontrol').update({ pan: cloudPanAngle, tilt: cloudTiltAngle });
-    if (ESPMAIN_IP !== "") {
-        sendLocalCommandIfAllowed(`${ESPMAIN_IP}/servo?go=${direction}`);
-    }
     addLog('SRV', `☁️ Cloud Servo -> X(Pan): ${cloudPanAngle}° | Y(Tilt): ${cloudTiltAngle}°`);
 };
 
@@ -541,20 +513,18 @@ function updateRelayButtonsUI() {
     }
 }
 
-// Kontrol Relay 4-Channel via Cloud Firebase (100% Bebas Error CORS)
+// Kontrol Relay 4-Channel Murni via Cloud Firebase (Bebas Error CORS)
 window.toggleRelayTest = function(channel) {
     if (userRole !== 'developer') return;
     if (channel === 1) {
         relayCH1_Pump = !relayCH1_Pump;
         let st = relayCH1_Pump ? "ON" : "OFF";
         database.ref('kontrol').update({ pompa: st });
-        if (ESPMAIN_IP !== "") sendLocalCommandIfAllowed(`${ESPMAIN_IP}/relay?ch=1&val=${st}`);
         addLog('TST', `🚰 CLOUD RELAY CH1 (Pompa): ${st}`);
     } else if (channel === 2) {
         relayCH2_Alarm = !relayCH2_Alarm;
         let st = relayCH2_Alarm ? "ON" : "OFF";
         database.ref('kontrol').update({ alarm: st });
-        if (ESPMAIN_IP !== "") sendLocalCommandIfAllowed(`${ESPMAIN_IP}/relay?ch=2&val=${st}`);
 
         if (relayCH2_Alarm) {
             document.body.classList.add('danger-mode');
@@ -572,7 +542,6 @@ window.toggleRelayTest = function(channel) {
         relayCH3_Lamp = !relayCH3_Lamp;
         let st = relayCH3_Lamp ? "ON" : "OFF";
         database.ref('kontrol').update({ lampu: st });
-        if (ESPMAIN_IP !== "") sendLocalCommandIfAllowed(`${ESPMAIN_IP}/relay?ch=3&val=${st}`);
         addLog('TST', `🟠 CLOUD RELAY CH3 (Lampu Waspada): ${st}`);
     }
     updateRelayButtonsUI();
@@ -586,7 +555,6 @@ window.toggleChargeMode = function(forceMode = null) {
         relayCH4_Charge = (relayCH4_Charge === "SOLAR") ? "ADAPTOR" : "SOLAR";
     }
     database.ref('kontrol').update({ charge_mode: relayCH4_Charge });
-    if (ESPMAIN_IP !== "") sendLocalCommandIfAllowed(`${ESPMAIN_IP}/relay?ch=4&val=${relayCH4_Charge}`);
     addLog('PWR', `⚡ CLOUD RELAY CH4 (Sumber Charge): MODE ${relayCH4_Charge}`);
     updateRelayButtonsUI();
 };
@@ -608,7 +576,6 @@ window.toggleFlashLED = function(customAction = 'flash') {
     }
     setText('cam-flash-badge', lvlText);
     database.ref('kontrol').update({ cam_flash: localFlashStep });
-    sendLocalCommandIfAllowed(`${ESPCAM_IP}/action?go=${customAction}`);
     addLog('CAM', `💡 Lampu Flash ESP32-CAM diatur ke: ${lvlText}`);
 };
 
@@ -624,7 +591,6 @@ window.resetZoom = function() {
     const camEl = document.getElementById('espcam-stream');
     if (camEl) camEl.style.transform = `scale(1.0)`;
     setText('cam-zoom-label', `1.0x`);
-    sendLocalCommandIfAllowed(`${ESPCAM_IP}/action?go=fov_wide`);
 };
 
 window.toggleCamFit = function() {
