@@ -15,6 +15,9 @@ const database = firebase.database();
 const TELEGRAM_BOT_TOKEN = "8747686027:AAHv-CpXhgpM7EvPYFdjh_vSkF6CKLVt_6Q";
 const TELEGRAM_CHAT_ID   = "8233815181";
 
+// Deteksi apakah web dibuka lewat HTTPS (GitHub Pages) atau HTTP Lokal
+const IS_HTTPS_HOST = (window.location.protocol === 'https:');
+
 // Helper anti-null agar UI selalu aman
 function setText(id, val) {
     const el = document.getElementById(id);
@@ -127,6 +130,13 @@ function addLog(tipe, pesan) {
     let clr = tipe === 'ERR' ? '#ef4444' : (tipe === 'AI' ? '#c084fc' : (tipe === 'NET' ? '#10b981' : (tipe === 'CMD' ? '#facc15' : '#38bdf8')));
     term.innerHTML += `<div class="terminal-line"><span style="color:#64748b; width:65px;">${time}</span> <span style="color:${clr}; font-weight:bold; width:50px;">[${tipe}]</span> <span style="color:var(--text-main);">${pesan}</span></div>`;
     term.scrollTop = term.scrollHeight;
+}
+
+// Helper pengiriman perintah lokal yang aman dari blokir CORS HTTPS
+function sendLocalCommandIfAllowed(url) {
+    if (!IS_HTTPS_HOST && url) {
+        fetch(url, { mode: 'no-cors' }).catch(() => {});
+    }
 }
 
 // ================= 1. AI VOICE ASSISTANT (POMPA, CHARGING, TELEGRAM, & TELEMETRI) =================
@@ -324,7 +334,7 @@ window.toggleYolo = function() {
     }
 };
 
-// ================= 3. FUNGSI KONTROL DASHBOARD, SIMULASI & RELAY =================
+// ================= 3. FUNGSI KONTROL DASHBOARD, SIMULASI & RELAY (100% CLOUD FIREBASE) =================
 window.switchSubMenu = function(menuName) {
     const vOver  = document.getElementById('view-overview');
     const vPower = document.getElementById('view-power');
@@ -450,6 +460,7 @@ window.simulateBatteryVoltage = function(simBattV) {
     addLog('PWR', `🧪 Simulasi Tegangan Aki: ${simBattV.toFixed(2)}V -> Mode Charge: ${newChg}`);
 };
 
+// Kontrol Servo via Cloud Firebase (Bebas Error CORS)
 window.moveCam = function(direction) {
     if (userRole !== 'developer') return;
     if (direction === 'left')   cloudPanAngle  = Math.min(180, cloudPanAngle + SERVO_STEP);
@@ -459,21 +470,10 @@ window.moveCam = function(direction) {
     if (direction === 'center') { cloudPanAngle = 90; cloudTiltAngle = 90; }
 
     database.ref('kontrol').update({ pan: cloudPanAngle, tilt: cloudTiltAngle });
-
     if (ESPMAIN_IP !== "") {
-        fetch(`${ESPMAIN_IP}/servo?go=${direction}`)
-            .then(res => res.json())
-            .then(data => {
-                cloudPanAngle  = data.pan;
-                cloudTiltAngle = data.tilt;
-                addLog('SRV', `Servo ESP32 -> X(Pan):${data.pan}° | Y(Tilt):${data.tilt}°`);
-            })
-            .catch(() => {
-                addLog('SRV', `Cloud Servo -> X(Pan):${cloudPanAngle}° | Y(Tilt):${cloudTiltAngle}°`);
-            });
-    } else {
-        addLog('SRV', `Cloud Servo -> X(Pan):${cloudPanAngle}° | Y(Tilt):${cloudTiltAngle}°`);
+        sendLocalCommandIfAllowed(`${ESPMAIN_IP}/servo?go=${direction}`);
     }
+    addLog('SRV', `☁️ Cloud Servo -> X(Pan): ${cloudPanAngle}° | Y(Tilt): ${cloudTiltAngle}°`);
 };
 
 function updateRelayButtonsUI() {
@@ -541,19 +541,20 @@ function updateRelayButtonsUI() {
     }
 }
 
+// Kontrol Relay 4-Channel via Cloud Firebase (100% Bebas Error CORS)
 window.toggleRelayTest = function(channel) {
     if (userRole !== 'developer') return;
     if (channel === 1) {
         relayCH1_Pump = !relayCH1_Pump;
         let st = relayCH1_Pump ? "ON" : "OFF";
         database.ref('kontrol').update({ pompa: st });
-        if (ESPMAIN_IP !== "") fetch(`${ESPMAIN_IP}/relay?ch=1&val=${st}`).catch(() => {});
-        addLog('TST', `🚰 TEST POMPA (CH1): ${st}`);
+        if (ESPMAIN_IP !== "") sendLocalCommandIfAllowed(`${ESPMAIN_IP}/relay?ch=1&val=${st}`);
+        addLog('TST', `🚰 CLOUD RELAY CH1 (Pompa): ${st}`);
     } else if (channel === 2) {
         relayCH2_Alarm = !relayCH2_Alarm;
         let st = relayCH2_Alarm ? "ON" : "OFF";
         database.ref('kontrol').update({ alarm: st });
-        if (ESPMAIN_IP !== "") fetch(`${ESPMAIN_IP}/relay?ch=2&val=${st}`).catch(() => {});
+        if (ESPMAIN_IP !== "") sendLocalCommandIfAllowed(`${ESPMAIN_IP}/relay?ch=2&val=${st}`);
 
         if (relayCH2_Alarm) {
             document.body.classList.add('danger-mode');
@@ -566,13 +567,13 @@ window.toggleRelayTest = function(channel) {
             if (currentStatus !== 'BAHAYA') document.body.classList.remove('danger-mode');
             if (testAlarmLoop) { clearInterval(testAlarmLoop); testAlarmLoop = null; }
         }
-        addLog('TST', `🚨 TEST ALARM SIRINE (CH2): ${st}`);
+        addLog('TST', `🚨 CLOUD RELAY CH2 (Alarm): ${st}`);
     } else if (channel === 3) {
         relayCH3_Lamp = !relayCH3_Lamp;
         let st = relayCH3_Lamp ? "ON" : "OFF";
         database.ref('kontrol').update({ lampu: st });
-        if (ESPMAIN_IP !== "") fetch(`${ESPMAIN_IP}/relay?ch=3&val=${st}`).catch(() => {});
-        addLog('TST', `🟠 TEST LAMPU ORANGE WASPADA (CH3): ${st}`);
+        if (ESPMAIN_IP !== "") sendLocalCommandIfAllowed(`${ESPMAIN_IP}/relay?ch=3&val=${st}`);
+        addLog('TST', `🟠 CLOUD RELAY CH3 (Lampu Waspada): ${st}`);
     }
     updateRelayButtonsUI();
 };
@@ -585,28 +586,30 @@ window.toggleChargeMode = function(forceMode = null) {
         relayCH4_Charge = (relayCH4_Charge === "SOLAR") ? "ADAPTOR" : "SOLAR";
     }
     database.ref('kontrol').update({ charge_mode: relayCH4_Charge });
-    if (ESPMAIN_IP !== "") fetch(`${ESPMAIN_IP}/relay?ch=4&val=${relayCH4_Charge}`).catch(() => {});
-    addLog('PWR', `⚡ CH4 Sumber Pengisian diatur ke: MODE ${relayCH4_Charge}`);
+    if (ESPMAIN_IP !== "") sendLocalCommandIfAllowed(`${ESPMAIN_IP}/relay?ch=4&val=${relayCH4_Charge}`);
+    addLog('PWR', `⚡ CLOUD RELAY CH4 (Sumber Charge): MODE ${relayCH4_Charge}`);
     updateRelayButtonsUI();
 };
 
+let localFlashStep = 0;
 window.toggleFlashLED = function(customAction = 'flash') {
     if (userRole !== 'developer') return;
-    fetch(`${ESPCAM_IP}/action?go=${customAction}`)
-        .then(res => res.json())
-        .then(data => {
-            const levels = ['OFF', 'LOW (30%)', 'MED (60%)', 'MAX (100%)'];
-            const lvlText = levels[data.flash] || 'OFF';
-            const btnFlash = document.getElementById('btn-flash');
-            if (btnFlash) {
-                btnFlash.innerText = `💡 FLASH: ${lvlText}`;
-                btnFlash.style.background = data.flash > 0 ? '#facc15' : 'transparent';
-                btnFlash.style.color = data.flash > 0 ? '#000' : '#facc15';
-            }
-            setText('cam-flash-badge', lvlText);
-            addLog('CAM', `Lampu Flash ESP32-CAM diatur ke: ${lvlText}`);
-        })
-        .catch(() => addLog('ERR', `Gagal mengubah Lampu Flash di ${ESPCAM_IP}`));
+    if (customAction === 'flash_on') localFlashStep = 3;
+    else if (customAction === 'flash_off') localFlashStep = 0;
+    else localFlashStep = (localFlashStep + 1) % 4;
+
+    const levels = ['OFF', 'LOW (30%)', 'MED (60%)', 'MAX (100%)'];
+    const lvlText = levels[localFlashStep] || 'OFF';
+    const btnFlash = document.getElementById('btn-flash');
+    if (btnFlash) {
+        btnFlash.innerText = `💡 FLASH: ${lvlText}`;
+        btnFlash.style.background = localFlashStep > 0 ? '#facc15' : 'transparent';
+        btnFlash.style.color = localFlashStep > 0 ? '#000' : '#facc15';
+    }
+    setText('cam-flash-badge', lvlText);
+    database.ref('kontrol').update({ cam_flash: localFlashStep });
+    sendLocalCommandIfAllowed(`${ESPCAM_IP}/action?go=${customAction}`);
+    addLog('CAM', `💡 Lampu Flash ESP32-CAM diatur ke: ${lvlText}`);
 };
 
 window.adjustZoom = function(delta) {
@@ -621,7 +624,7 @@ window.resetZoom = function() {
     const camEl = document.getElementById('espcam-stream');
     if (camEl) camEl.style.transform = `scale(1.0)`;
     setText('cam-zoom-label', `1.0x`);
-    fetch(`${ESPCAM_IP}/action?go=fov_wide`).catch(() => {});
+    sendLocalCommandIfAllowed(`${ESPCAM_IP}/action?go=fov_wide`);
 };
 
 window.toggleCamFit = function() {
@@ -1134,7 +1137,7 @@ function startFirebaseListeners() {
                 if (ESPMAIN_IP !== detectedIP) {
                     ESPMAIN_IP = detectedIP;
                     localStorage.setItem('aegis_main_ip', ESPMAIN_IP);
-                    addLog('SYS', `Node ESP32 Utama terdeteksi di: ${ESPMAIN_IP}`);
+                    addLog('SYS', `Node ESP32 Utama aktif di: ${data.node_ip} (Cloud Sync Aktif)`);
                 }
             }
 
@@ -1238,7 +1241,6 @@ function startFirebaseListeners() {
                 addLog('SYS', '✅ PROTOKOL DIHENTIKAN: Kondisi Kembali Aman.');
             }
 
-            // Deteksi Perubahan Status untuk Suara & Notifikasi Telegram Otomatis
             if (systemBooted && previousStatus !== null && previousStatus !== data.status) {
                 if (data.status === 'WASPADA') {
                     window.sendTelegramNotification(
