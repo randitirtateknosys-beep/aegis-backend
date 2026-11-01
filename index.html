@@ -75,8 +75,9 @@
             </div>
         </div>
 
-        <!-- 8 WIDGET UTAMA (SELALU TAMPIL) -->
-        <div class="widget-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+        <!-- 10 WIDGET UTAMA (PAS 2 BARIS x 5 KOLOM) -->
+        <div class="widget-grid" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));">
+            <!-- 1. Status Lingkungan -->
             <div class="widget-card glass-panel" id="card-status">
                 <div class="widget-info">
                     <h4>STATUS LINGKUNGAN</h4>
@@ -85,6 +86,8 @@
                 </div>
                 <div class="widget-icon">🛡️</div>
             </div>
+
+            <!-- 2. Elevasi Air -->
             <div class="widget-card glass-panel" id="card-air" style="overflow: hidden; position: relative;">
                 <canvas id="fluid-canvas" style="position:absolute; bottom:0; left:0; width:100%; height:100%; z-index:0; opacity:0.35;"></canvas>
                 <div class="widget-info" style="z-index:2;">
@@ -94,14 +97,28 @@
                 </div>
                 <div class="widget-icon" style="color:var(--primary); z-index:2;">🌊</div>
             </div>
+
+            <!-- 3. Prediksi AI & Tren Air (WIDGET BARU #9) -->
+            <div class="widget-card glass-panel" style="border-color: rgba(168, 85, 247, 0.4);">
+                <div class="widget-info">
+                    <h4 style="color: #c084fc;">🧠 AI SMART FORECAST</h4>
+                    <p><span id="top-ai-pred">0.0</span> <span style="font-size: 14px; color: #c084fc;">CM</span></p>
+                    <div class="widget-sub">Tren: <span id="top-ai-trend" style="color:var(--aman); font-weight:bold;">STABIL (0 cm)</span></div>
+                </div>
+                <div class="widget-icon">📈</div>
+            </div>
+
+            <!-- 4. Debit Aliran -->
             <div class="widget-card glass-panel">
                 <div class="widget-info">
-                    <h4>DEBIT ALIRAN</h4>
+                    <h4>DEBIT ALIRAN (YF-S201)</h4>
                     <p><span id="teks-flow">0.00</span> <span style="font-size: 14px; color: var(--primary);">L/M</span></p>
                     <div class="widget-sub">Massa: <span id="top-mass" style="color:var(--primary);">0.00</span> kg/s</div>
                 </div>
                 <div class="widget-icon" style="color:var(--primary);">🚰</div>
             </div>
+
+            <!-- 5. Suhu & Cuaca -->
             <div class="widget-card glass-panel">
                 <div class="widget-info">
                     <h4>SUHU & CUACA</h4>
@@ -110,40 +127,57 @@
                 </div>
                 <div class="widget-icon" style="color:var(--primary);">🌡️</div>
             </div>
+
+            <!-- 6. Solar Panel (INA219 #1) -->
             <div class="widget-card glass-panel" style="border-color: rgba(245, 158, 11, 0.35);">
                 <div class="widget-info">
                     <h4 style="color: var(--waspada);">☀️ SOLAR PANEL (INA1)</h4>
                     <p><span id="top-solar-v">0.00</span> <span style="font-size: 14px; color: var(--waspada);">VOLT</span></p>
-                    <div class="widget-sub">ARUS: <span id="top-solar-i" style="color:#facc15; font-weight:bold;">0</span> mA | <span id="top-solar-p">0</span> mW</div>
+                    <div class="widget-sub">Arus: <span id="top-solar-i" style="color:#facc15; font-weight:bold;">0</span> mA | <span id="top-solar-p">0</span> mW</div>
                 </div>
                 <div class="widget-icon">☀️</div>
             </div>
+
+            <!-- 7. Baterai / Aki (INA219 #2) -->
             <div class="widget-card glass-panel" id="card-batt" style="border-color: rgba(16, 185, 129, 0.35);">
                 <div class="widget-info">
                     <h4 style="color: var(--aman);">🔋 BATERAI / AKI (INA2)</h4>
                     <p><span id="top-batt-v">0.00</span> <span style="font-size: 14px; color: var(--aman);">VOLT</span></p>
-                    <div class="widget-sub">ARUS: <span id="top-batt-i" style="color:var(--aman); font-weight:bold;">0</span> mA (<span id="top-batt-pct" style="color:#fff;">92%</span>)</div>
+                    <div class="widget-sub">Arus: <span id="top-batt-i" style="color:var(--aman); font-weight:bold;">0</span> mA (<span id="top-batt-pct" style="color:#fff;">92%</span>)</div>
                 </div>
                 <div class="widget-icon">🔋</div>
             </div>
-            <div class="widget-card glass-panel">
-                <div class="widget-info">
-                    <h4>📡 SINYAL LORA</h4>
-                    <p><span id="top-lora-rssi">-78</span> <span style="font-size: 14px; color: var(--primary);">dBm</span></p>
-                    <div class="widget-sub">FREKUENSI: <span style="color:var(--primary); font-weight:bold;">433 MHz</span></div>
-                </div>
-                <div class="widget-icon" style="color:var(--primary);">📡</div>
-            </div>
+
+            <!-- 8. Sumber Pengisian & Smart ATS (CH4) -->
             <div class="widget-card glass-panel" id="card-charge">
                 <div class="widget-info">
-                    <h4>⚡ SUMBER PENGISIAN</h4>
+                    <h4>⚡ SUMBER DAYA (CH4)</h4>
                     <p id="top-charge-mode" style="font-size: 18px; color: var(--aman); margin-top: 10px; font-weight:bold;">☀️ SOLAR PANEL</p>
-                    <div class="widget-sub">ATS (<7V): <span id="top-ats-stat" style="color:var(--aman); font-weight:bold;">AUTO</span></div>
+                    <div class="widget-sub">Smart ATS (&lt;7V): <span id="top-ats-stat" style="color:var(--aman); font-weight:bold;">AUTO</span></div>
                 </div>
                 <div class="widget-icon">⚡</div>
             </div>
-        </div>
 
+            <!-- 9. Status Mitigasi & Aktuator Relay (WIDGET BARU #10) -->
+            <div class="widget-card glass-panel" id="card-mitigasi">
+                <div class="widget-info">
+                    <h4>🚨 STATUS MITIGASI</h4>
+                    <p id="top-pump-big" style="font-size: 18px; color: var(--text-muted); margin-top: 10px; font-weight:bold;">POMPA: STANDBY</p>
+                    <div class="widget-sub">Alarm: <span id="top-alarm-stat" style="font-weight:bold;">OFF</span> | Lampu: <span id="top-lamp-stat" style="font-weight:bold;">OFF</span></div>
+                </div>
+                <div class="widget-icon" id="top-mitigasi-icon">⚙️</div>
+            </div>
+
+            <!-- 10. Sinyal LoRa & Sinkronisasi Cloud -->
+            <div class="widget-card glass-panel">
+                <div class="widget-info">
+                    <h4>📡 TELEMETRI LORA</h4>
+                    <p><span id="top-lora-rssi">-78</span> <span style="font-size: 14px; color: var(--primary);">dBm</span></p>
+                    <div class="widget-sub">Sync: <span id="top-last-sync" style="color:var(--primary); font-weight:bold;">LIVE</span> (433 MHz)</div>
+                </div>
+                <div class="widget-icon" style="color:var(--primary);">📡</div>
+            </div>
+        </div>
         <!-- NAVIGASI TAB -->
         <div class="sub-nav-bar glass-panel">
             <button class="sub-nav-btn active btn-sfx" id="tab-btn-overview" onclick="switchSubMenu('overview')">📊 DASHBOARD UTAMA</button>
