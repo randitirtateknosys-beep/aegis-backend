@@ -15,7 +15,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌐</text></svg>">
-    <link rel="stylesheet" href="./style.css?v=smartfull1">
+    <link rel="stylesheet" href="./style.css?v=aegis_pro1">
 </head>
 <body id="report-area">
 
@@ -35,20 +35,16 @@
         </div>
     </div>
 
-    <!-- LAYAR LOGIN MULTI-ROLE (DEVELOPER & VIEWER) -->
+    <!-- LAYAR LOGIN MULTI-ROLE (PASSWORD TERSEMBUNYI & AMAN) -->
     <div id="login-screen">
         <div class="login-box">
             <div style="font-size: 42px; margin-bottom: 8px;">🌐</div>
             <h2>A.E.G.I.S SMART IOT</h2>
             <p>INTEGRATED FLOOD & POWER MANAGEMENT</p>
-            <input type="text" id="user-name" class="login-input" placeholder="NAMA PENGGUNA" autocomplete="off" style="margin-bottom: 12px; letter-spacing: 1px;">
-            <input type="password" id="pass-input" class="login-input" placeholder="KODE AKSES" autocomplete="off">
-            <div style="font-size:11px; color:var(--text-muted); margin-bottom:18px; text-align:left; background:rgba(255,255,255,0.03); padding:10px; border-radius:8px; border:1px solid var(--glass-border);">
-                🔑 <b>Developer (Full Control):</b> <code>dev2026</code> / <code>admin</code><br>
-                👁️ <b>Viewer (Monitoring):</b> <code>tamu</code> / <code>viewer</code>
-            </div>
-            <button class="btn-login btn-sfx" onclick="verifyLogin()">MASUK DASHBOARD</button>
-            <div id="login-error">KODE AKSES SALAH. SILAKAN COBA LAGI.</div>
+            <input type="text" id="user-name" class="login-input" placeholder="IDENTITAS PENGGUNA" autocomplete="off" style="margin-bottom: 12px; letter-spacing: 1px;">
+            <input type="password" id="pass-input" class="login-input" placeholder="KODE OTORISASI AKSES" autocomplete="off">
+            <button class="btn-login btn-sfx" onclick="verifyLogin()">OTORISASI MASUK</button>
+            <div id="login-error">OTORISASI DITOLAK. KODE AKSES TIDAK VALID.</div>
         </div>
     </div>
 
@@ -82,7 +78,7 @@
 
                 <button class="btn-sfx dev-only" onclick="toggleDeck()" style="background: var(--waspada); color: #000; border: none; padding: 8px 14px; border-radius: 20px; font-weight: 700; font-size: 11px; box-shadow: 0 0 12px rgba(245,158,11,0.4); cursor: pointer; display: flex; align-items: center; gap: 5px;">⚙️ PANEL SIMULASI</button>
                 <button class="theme-toggle btn-sfx" id="btn-theme" onclick="toggleTheme()">🌞 TERANG</button>
-                <button class="ai-mic-btn btn-sfx" id="btn-ai" onclick="toggleVoiceAI()"><span class="mic-icon">🎙️</span> <span id="ai-text">AI ASSISTANT</span></button>
+                <button class="ai-mic-btn btn-sfx listening" id="btn-ai" onclick="toggleVoiceAI()" title="Mode Hands-Free Aktif (Cukup panggil 'Halo Aegis' atau ucapkan perintah)"><span class="mic-icon">🎙️</span> <span id="ai-text">AI STANDBY (PANGGIL "AEGIS")</span></button>
                 <div class="live-clock"><p id="teks-jam">00:00:00</p><p id="teks-tanggal">Memuat...</p></div>
             </div>
         </div>
@@ -206,9 +202,7 @@
 
         <div id="hologram-area">
             
-            <!-- ======================================================================= -->
-            <!-- SUB-MENU 1: OVERVIEW UTAMA (SELURUH PANEL ASLI UTUH 100%)               -->
-            <!-- ======================================================================= -->
+            <!-- SUB-MENU 1: OVERVIEW UTAMA -->
             <div id="view-overview" class="grand-layout">
                 <div class="left-column">
                     <div class="content-box glass-panel">
@@ -260,25 +254,25 @@
                 <div class="right-column">
                     <div class="content-box glass-panel">
                         <div class="header-box" style="margin-bottom:8px; flex-wrap:wrap; gap:5px;">
-                            <h3>📷 SMART OPTICAL CAMERA (CAM-1)</h3>
+                            <h3>📷 SMART CLOUD CAMERA (CAM-1)</h3>
                             <div style="display:flex; align-items:center; gap:5px; font-family:var(--font-tech); font-size:9px; color:var(--text-muted); flex-wrap:wrap;">
                                 <span class="pcb-led pcb-tx" id="led-tx"></span> TX
                                 <span class="pcb-led pcb-rx" id="led-rx"></span> RX
                                 <button class="btn-export btn-sfx dev-only" id="btn-flash" onclick="toggleFlashLED()" style="padding:3px 7px; font-size:9px; border-color:#facc15; color:#facc15;">💡 FLASH: OFF</button>
                                 <button class="btn-export btn-sfx" id="btn-fit" onclick="toggleCamFit()" style="padding:3px 6px; font-size:9px;">🖼️ FULL SENSOR</button>
-                                <button class="btn-export btn-sfx dev-only" onclick="changeCamIPPrompt()" style="padding:3px 6px; font-size:9px;">⚙️ IP</button>
+                                <button class="btn-export btn-sfx dev-only" onclick="changeCamIPPrompt()" style="padding:3px 6px; font-size:9px;">⚙️ MODE IP</button>
                                 <button class="btn-export btn-sfx" onclick="toggleYolo()" style="padding:3px 6px; font-size:9px; border-color:#4ade80; color:#4ade80;">YOLOv10n AI</button>
                                 <button class="btn-export btn-sfx" onclick="toggleFullscreenCam()" style="padding:3px 6px; font-size:9px;">⛶ FULL</button>
                             </div>
                         </div>
-
                         <div class="cctv-feed" id="cctv-feed">
-                            <img id="espcam-stream" src="" style="width:100%; height:100%; object-fit:contain; position:absolute; top:0; left:0; z-index:0; transition: transform 0.25s ease;" alt="Menunggu Cloud Stream ESP32-CAM...">
+                            <img id="espcam-stream" src="" style="width:100%; height:100%; object-fit:contain; position:absolute; top:0; left:0; z-index:0; transition: transform 0.25s ease;" alt="Menunggu Cloud Base64 Stream dari ESP32-CAM...">
                             
                             <div class="cctv-overlay">
-                                <div class="cctv-badge"><span class="live-dot"></span> <span id="cam-ip-label">CLOUD STREAM</span></div>
+                                <div class="cctv-badge"><span class="live-dot"></span> <span id="cam-ip-label">FIREBASE CLOUD CAM</span></div>
                                 <div class="cctv-badge">ZOOM: <span id="cam-zoom-label">1.0x</span> | FLASH: <span id="cam-flash-badge">OFF</span></div>
                             </div>
+
                             <div style="position:absolute; bottom:12px; left:12px; z-index:10; display:flex; gap:5px; background:rgba(0,5,15,0.75); padding:6px 8px; border-radius:8px; border:1px solid rgba(56,189,248,0.4); backdrop-filter:blur(6px); align-items:center;">
                                 <button class="btn-servo btn-sfx" style="width:30px; height:30px;" onclick="adjustZoom(-0.2)" title="Zoom Out">➖</button>
                                 <button class="btn-servo btn-sfx" style="padding:0 8px; height:30px; font-size:10px; font-family:var(--font-tech);" onclick="resetZoom()" title="Reset 1.0x">1.0x</button>
@@ -370,15 +364,13 @@
                         <div class="header-box"><h3>💻 SYSTEM CLOUD CONSOLE & LOGS</h3></div>
                         <div class="terminal-box">
                             <div id="terminalLog"><div class="terminal-line"><span style="color:#64748b;">[INIT]</span> <span style="color:var(--text-main);">A.E.G.I.S Smart Cloud SDK Booting... OK</span></div></div>
-                            <div class="terminal-input-wrapper dev-only"><span style="color:var(--primary);">dev@aegis:~#</span><input type="text" id="cmd-input" class="terminal-input" placeholder="Ketik 'pump on', 'alarm on', 'mode solar', 'mode adaptor'..." autocomplete="off" spellcheck="false"></div>
+                            <div class="terminal-input-wrapper dev-only"><span style="color:var(--primary);">dev@aegis:~#</span><input type="text" id="cmd-input" class="terminal-input" placeholder="Ketik 'pump on', 'alarm on', 'mode solar', 'test telegram'..." autocomplete="off" spellcheck="false"></div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- ======================================================================= -->
-            <!-- SUB-MENU 2: TELEMETRI DAYA, GRAFIK INA219 & OTOMATISASI ATS (< 7V)      -->
-            <!-- ======================================================================= -->
+            <!-- SUB-MENU 2: TELEMETRI DAYA, GRAFIK INA219 & OTOMATISASI ATS (< 7V) -->
             <div id="view-power" class="grand-layout" style="display: none;">
                 <div class="left-column">
                     <div class="content-box glass-panel">
@@ -471,9 +463,7 @@
                 </div>
             </div>
 
-            <!-- ======================================================================= -->
-            <!-- SUB-MENU 3: DATABASE RIWAYAT & LAPORAN LENGKAP                          -->
-            <!-- ======================================================================= -->
+            <!-- SUB-MENU 3: DATABASE RIWAYAT & LAPORAN LENGKAP -->
             <div id="view-logs" style="display: none;">
                 <div class="content-box glass-panel" style="margin-bottom: 0;">
                     <div class="header-box">
@@ -508,6 +498,6 @@
 
         </div>
     </div> 
-    <script src="./main.js?v=smartfinal2"></script>
+    <script src="./main.js?v=aegis_pro1"></script>
 </body>
 </html>
