@@ -15,7 +15,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌐</text></svg>">
-    <link rel="stylesheet" href="./style.css?v=aegis_pro1">
+    <link rel="stylesheet" href="./style.css?v=aegis_pro2">
 </head>
 <body id="report-area">
 
@@ -78,7 +78,7 @@
 
                 <button class="btn-sfx dev-only" onclick="toggleDeck()" style="background: var(--waspada); color: #000; border: none; padding: 8px 14px; border-radius: 20px; font-weight: 700; font-size: 11px; box-shadow: 0 0 12px rgba(245,158,11,0.4); cursor: pointer; display: flex; align-items: center; gap: 5px;">⚙️ PANEL SIMULASI</button>
                 <button class="theme-toggle btn-sfx" id="btn-theme" onclick="toggleTheme()">🌞 TERANG</button>
-                <button class="ai-mic-btn btn-sfx listening" id="btn-ai" onclick="toggleVoiceAI()" title="Mode Hands-Free Aktif (Cukup panggil 'Halo Aegis' atau ucapkan perintah)"><span class="mic-icon">🎙️</span> <span id="ai-text">AI STANDBY (PANGGIL "AEGIS")</span></button>
+                <button class="ai-mic-btn btn-sfx" id="btn-ai" onclick="toggleVoiceAI()" title="Klik untuk bicara langsung atau panggil 'Aegis' diikuti perintah"><span class="mic-icon">🎙️</span> <span id="ai-text">AI SIAGA (PANGGIL "AEGIS")</span></button>
                 <div class="live-clock"><p id="teks-jam">00:00:00</p><p id="teks-tanggal">Memuat...</p></div>
             </div>
         </div>
@@ -258,6 +258,7 @@
                             <div style="display:flex; align-items:center; gap:5px; font-family:var(--font-tech); font-size:9px; color:var(--text-muted); flex-wrap:wrap;">
                                 <span class="pcb-led pcb-tx" id="led-tx"></span> TX
                                 <span class="pcb-led pcb-rx" id="led-rx"></span> RX
+                                <button class="btn-export btn-sfx dev-only" id="btn-autosweep" onclick="toggleAutoSweep()" style="padding:3px 7px; font-size:9px; border-color:#10b981; color:#10b981;">🔄 PATROLI: OFF</button>
                                 <button class="btn-export btn-sfx dev-only" id="btn-flash" onclick="toggleFlashLED()" style="padding:3px 7px; font-size:9px; border-color:#facc15; color:#facc15;">💡 FLASH: OFF</button>
                                 <button class="btn-export btn-sfx" id="btn-fit" onclick="toggleCamFit()" style="padding:3px 6px; font-size:9px;">🖼️ FULL SENSOR</button>
                                 <button class="btn-export btn-sfx dev-only" onclick="changeCamIPPrompt()" style="padding:3px 6px; font-size:9px;">⚙️ MODE IP</button>
@@ -270,14 +271,16 @@
                             
                             <div class="cctv-overlay">
                                 <div class="cctv-badge"><span class="live-dot"></span> <span id="cam-ip-label">FIREBASE CLOUD CAM</span></div>
-                                <div class="cctv-badge">ZOOM: <span id="cam-zoom-label">1.0x</span> | FLASH: <span id="cam-flash-badge">OFF</span></div>
+                                <div class="cctv-badge">ZOOM: <span id="cam-zoom-label">1.0x</span> | FLASH: <span id="cam-flash-badge">OFF</span> | SERVO: <span id="cam-servo-label" style="color:#10b981;">90°</span></div>
                             </div>
 
-                            <div style="position:absolute; bottom:12px; left:12px; z-index:10; display:flex; gap:5px; background:rgba(0,5,15,0.75); padding:6px 8px; border-radius:8px; border:1px solid rgba(56,189,248,0.4); backdrop-filter:blur(6px); align-items:center;">
+                            <!-- Panel Pintas Zoom, Flash & Patroli Otomatis di Layar Kamera -->
+                            <div style="position:absolute; bottom:12px; left:12px; z-index:10; display:flex; gap:5px; background:rgba(0,5,15,0.78); padding:6px 8px; border-radius:8px; border:1px solid rgba(56,189,248,0.4); backdrop-filter:blur(6px); align-items:center;">
                                 <button class="btn-servo btn-sfx" style="width:30px; height:30px;" onclick="adjustZoom(-0.2)" title="Zoom Out">➖</button>
                                 <button class="btn-servo btn-sfx" style="padding:0 8px; height:30px; font-size:10px; font-family:var(--font-tech);" onclick="resetZoom()" title="Reset 1.0x">1.0x</button>
                                 <button class="btn-servo btn-sfx" style="width:30px; height:30px;" onclick="adjustZoom(0.2)" title="Zoom In">➕</button>
                                 <button class="btn-servo btn-sfx dev-only" style="width:32px; height:30px; border-color:#facc15; color:#facc15;" onclick="toggleFlashLED()" title="Lampu Flash LED">💡</button>
+                                <button class="btn-servo btn-sfx dev-only" id="btn-autosweep-mini" style="padding:0 8px; height:30px; font-size:10px; border-color:#10b981; color:#10b981; font-family:var(--font-tech);" onclick="toggleAutoSweep()" title="Patroli Otomatis Servo (Auto-Sweep)">🔄 PATROLI</button>
                             </div>
 
                             <div class="servo-pad dev-only">
@@ -364,7 +367,7 @@
                         <div class="header-box"><h3>💻 SYSTEM CLOUD CONSOLE & LOGS</h3></div>
                         <div class="terminal-box">
                             <div id="terminalLog"><div class="terminal-line"><span style="color:#64748b;">[INIT]</span> <span style="color:var(--text-main);">A.E.G.I.S Smart Cloud SDK Booting... OK</span></div></div>
-                            <div class="terminal-input-wrapper dev-only"><span style="color:var(--primary);">dev@aegis:~#</span><input type="text" id="cmd-input" class="terminal-input" placeholder="Ketik 'pump on', 'alarm on', 'mode solar', 'test telegram'..." autocomplete="off" spellcheck="false"></div>
+                            <div class="terminal-input-wrapper dev-only"><span style="color:var(--primary);">dev@aegis:~#</span><input type="text" id="cmd-input" class="terminal-input" placeholder="Ketik 'patroli on', 'pump on', 'mode solar', 'test telegram'..." autocomplete="off" spellcheck="false"></div>
                         </div>
                     </div>
                 </div>
@@ -498,6 +501,6 @@
 
         </div>
     </div> 
-    <script src="./main.js?v=aegis_pro1"></script>
+    <script src="./main.js?v=aegis_pro2"></script>
 </body>
 </html>
