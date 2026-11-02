@@ -81,7 +81,7 @@ window.sendTelegramNotification = function(pesan) {
     .catch(() => addLog('ERR', 'Koneksi ke API Telegram terputus.'));
 };
 
-// ================= AUDIO SYNTHESIZER & SPEECH HELPER (ANTI KATA "PUKUL") =================
+// ================= AUDIO SYNTHESIZER & BEEP KONFIRMASI HALUS =================
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 function playBeep(freq = 800, type = 'sine', duration = 0.1, vol = 0.05) {
     try {
@@ -105,8 +105,15 @@ function playBeep(freq = 800, type = 'sine', duration = 0.1, vol = 0.05) {
     } catch (e) {}
 }
 
-// Mengubah angka desimal (misal "12.40" atau "14.2") menjadi teks "12 koma 4"
-// sehingga TTS Bahasa Indonesia TIDAK PERNAH membacanya sebagai jam ("pukul 12.40")
+// Nada konfirmasi halus (2 nada naik: 880Hz -> 1320Hz) setiap kali perintah suara dieksekusi
+function playVoiceCommandBeep() {
+    playBeep(880, 'sine', 0.08, 0.04);
+    setTimeout(() => {
+        playBeep(1320, 'sine', 0.12, 0.05);
+    }, 90);
+}
+
+// Format angka desimal agar TTS Bahasa Indonesia TIDAK PERNAH membaca kata "pukul"
 function formatAngkaSuara(nilai) {
     let num = Number(nilai);
     if (isNaN(num)) return String(nilai);
@@ -120,38 +127,16 @@ function formatAngkaSuara(nilai) {
     return teks;
 }
 
-// Sanitasi menyeluruh semua angka bertitik/titik dua di dalam kalimat suara AI
 function bersihkanTeksSuara(teks) {
     if (!teks) return "";
     return String(teks)
-        // Hapus ".00" atau ".0" jika bernilai bulat
         .replace(/(\d+)\.0+\b/g, '$1')
-        // Ubah angka desimal "12.45" menjadi "12 koma 4 5" agar tidak pernah dibaca "pukul"
         .replace(/(\d+)\.(\d+)/g, (match, p1, p2) => {
             let desimal = p2.replace(/0+$/, '');
             if (!desimal) return p1;
             return `${p1} koma ${desimal.split('').join(' ')}`;
         })
-        // Hilangkan kata "pukul" jika masih ada di kalimat
         .replace(/\bpukul\b/gi, '');
-}
-
-let isSpeakingAI = false;
-function bicaraAI(teks, pitch = 1.05, rate = 0.98) {
-    try {
-        window.speechSynthesis.cancel();
-        let teksBersih = bersihkanTeksSuara(teks);
-        let msg = new SpeechSynthesisUtterance(teksBersih);
-        msg.lang = 'id-ID';
-        msg.pitch = pitch;
-        msg.rate = rate;
-        isSpeakingAI = true;
-        msg.onend = () => { isSpeakingAI = false; };
-        msg.onerror = () => { isSpeakingAI = false; };
-        window.speechSynthesis.speak(msg);
-    } catch (e) {
-        isSpeakingAI = false;
-    }
 }
 
 function addLog(tipe, pesan) {
@@ -176,89 +161,164 @@ function buatAnalisaSituasiLengkap() {
     let pred  = formatAngkaSuara(currentNextPred);
 
     let trenKalimat = "stabil";
-    if (currentDeltaWater > 0) trenKalimat = `sedang naik sebesar ${formatAngkaSuara(currentDeltaWater)} sentimeter dengan prediksi mencapai ${pred} sentimeter`;
-    else if (currentDeltaWater < 0) trenKalimat = `sedang berangsur surut sebesar ${formatAngkaSuara(Math.abs(currentDeltaWater))} sentimeter`;
+    if (currentDeltaWater > 0) trenKalimat = `naik ${formatAngkaSuara(currentDeltaWater)} sentimeter dengan prediksi mencapai ${pred} sentimeter`;
+    else if (currentDeltaWater < 0) trenKalimat = `surut ${formatAngkaSuara(Math.abs(currentDeltaWater))} sentimeter`;
 
     let mitigasiKalimat = relayCH1_Pump
         ? `Pompa penguras sedang aktif bekerja dengan debit aliran ${flow} liter per menit.`
         : `Pompa penguras dalam posisi siaga.`;
 
-    let dayaKalimat = `Tegangan panel surya ${sV} volt dengan arus ${sI} miliampere, sedangkan tegangan baterai ${bV} volt pada kapasitas ${bPct} menggunakan sumber pengisian ${relayCH4_Charge}.`;
+    let dayaKalimat = `Tegangan panel surya ${sV} volt dengan arus ${sI} miliampere, sedangkan tegangan baterai ${bV} volt pada kapasitas ${bPct} menggunakan mode pengisian ${relayCH4_Charge}.`;
 
     let kesimpulan = "";
     if (currentStatus === 'BAHAYA') {
         kesimpulan = "Peringatan darurat! Situasi saat ini berstatus BAHAYA kritis, protokol pompa dan evakuasi sedang dijalankan.";
     } else if (currentStatus === 'WASPADA') {
-        kesimpulan = "Perhatian, situasi saat ini berstatus SIAGA WASPADA, lampu peringatan oranye aktif dan harap pantau kenaikan air.";
+        kesimpulan = "Perhatian, situasi saat ini berstatus SIAGA WASPADA, lampu peringatan oranye aktif.";
     } else {
-        kesimpulan = "Secara keseluruhan situasi lingkungan saat ini AMAN dan terkendali.";
+        kesimpulan = "Situasi lingkungan saat ini AMAN dan terkendali.";
     }
 
-    return `${kesimpulan} Tinggi air terpantau ${air} sentimeter dan tren air ${trenKalimat}. Cuaca sekitar ${cuaca} dengan suhu ${suhu} derajat celcius. ${mitigasiKalimat} ${dayaKalimat}`;
+    return `${kesimpulan} Tinggi air ${air} sentimeter dan tren air ${trenKalimat}. Cuaca ${cuaca} dengan suhu ${suhu} derajat celcius. ${mitigasiKalimat} ${dayaKalimat}`;
 }
 
-// ================= 1. HANDS-FREE AI VOICE ASSISTANT (CUKUP PANGGIL TANPA KLIK) =================
-let handsFreeActive = true; // Default: Langsung aktif mendengarkan secara otomatis setelah login
-let aiListening     = false;
-let wakeWordWindow  = false; // Aktif beberapa detik setelah pengguna memanggil "Halo Aegis"
-let wakeTimer       = null;
+// ================= 1. SISTEM VOICE AI ANTI-LOOPING (STABIL & TENANG) =================
+let handsFreeStandby = true;  // Standby mendengarkan kata panggil "Aegis"
+let manualListenMode = false; // Aktif jika tombol diklik manual atau baru saja dipanggil "Halo Aegis"
+let isSpeakingAI     = false;
+let isRecRunning     = false;
+let manualTimeout    = null;
+let resumeTimer      = null;
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const recognition = SpeechRecognition ? new SpeechRecognition() : null;
 
-function mulaiHandsFreeAI() {
-    if (!recognition || !handsFreeActive) return;
+function updateAIButtonUI() {
+    const btn = document.getElementById('btn-ai');
+    const txt = document.getElementById('ai-text');
+    if (!btn || !txt) return;
+
+    if (isSpeakingAI) {
+        btn.classList.add('listening');
+        txt.innerText = "🔊 AI BERBICARA...";
+    } else if (manualListenMode) {
+        btn.classList.add('listening');
+        txt.innerText = "🎙️ MENDENGARKAN PERINTAH...";
+    } else if (handsFreeStandby) {
+        btn.classList.remove('listening'); // Tidak berkedip terus agar tidak mengganggu
+        txt.innerText = '🎙️ AI SIAGA (PANGGIL "AEGIS")';
+    } else {
+        btn.classList.remove('listening');
+        txt.innerText = "🔇 AI NONAKTIF";
+    }
+}
+
+function startRecognitionSafely() {
+    if (!recognition || isSpeakingAI || isRecRunning || (!handsFreeStandby && !manualListenMode)) return;
     try {
         recognition.start();
-        aiListening = true;
-        const btn = document.getElementById('btn-ai');
-        const txt = document.getElementById('ai-text');
-        if (btn) btn.classList.add('listening');
-        if (txt) txt.innerText = 'AI STANDBY (PANGGIL "AEGIS")';
     } catch (e) {}
+}
+
+function stopRecognitionSafely() {
+    if (!recognition) return;
+    try {
+        recognition.abort();
+    } catch (e) {}
+    isRecRunning = false;
+}
+
+// Fungsi bicara AI yang otomatis mematikan mikrofon sementara agar TIDAK PERNAH mendengar suaranya sendiri
+function bicaraAI(teks, pitch = 1.05, rate = 0.98) {
+    try {
+        if (resumeTimer) clearTimeout(resumeTimer);
+        if (manualTimeout) clearTimeout(manualTimeout);
+        manualListenMode = false;
+        isSpeakingAI = true;
+
+        // Matikan mikrofon sebelum AI bersuara agar tidak terjadi feedback loop
+        stopRecognitionSafely();
+        window.speechSynthesis.cancel();
+
+        let teksBersih = bersihkanTeksSuara(teks);
+        let msg = new SpeechSynthesisUtterance(teksBersih);
+        msg.lang = 'id-ID';
+        msg.pitch = pitch;
+        msg.rate = rate;
+        updateAIButtonUI();
+
+        const selesaiBicara = () => {
+            isSpeakingAI = false;
+            updateAIButtonUI();
+            // Tunggu 1.2 detik setelah suara selesai, baru nyalakan kembali standby secara tenang
+            if (handsFreeStandby && systemBooted) {
+                resumeTimer = setTimeout(() => {
+                    startRecognitionSafely();
+                }, 1200);
+            }
+        };
+
+        msg.onend = selesaiBicara;
+        msg.onerror = selesaiBicara;
+        window.speechSynthesis.speak(msg);
+    } catch (e) {
+        isSpeakingAI = false;
+        updateAIButtonUI();
+    }
 }
 
 if (recognition) {
     recognition.lang = 'id-ID';
-    recognition.continuous = true;
+    recognition.continuous = false; // Gunakan false agar setiap kalimat selesai diproses bersih (tidak muter terus)
     recognition.interimResults = false;
 
+    recognition.onstart = function() {
+        isRecRunning = true;
+        updateAIButtonUI();
+    };
+
     recognition.onresult = function(e) {
-        if (isSpeakingAI) return; // Abaikan pantulan suara speaker sendiri
+        if (isSpeakingAI) return;
         const rawTranscript = e.results[e.results.length - 1][0].transcript.toLowerCase().trim();
         if (!rawTranscript) return;
 
-        // Daftar kata pemicu panggilan (Wake Words) & kata kunci perintah langsung
-        const adaPanggilan = rawTranscript.includes('aegis') || rawTranscript.includes('ejis') || rawTranscript.includes('agis') || rawTranscript.includes('halo') || rawTranscript.includes('hai') || rawTranscript.includes('asisten') || rawTranscript.includes('komandan');
-        const adaPerintahLangsung = rawTranscript.includes('nyalakan') || rawTranscript.includes('hidupkan') || rawTranscript.includes('matikan') || rawTranscript.includes('hentikan') || rawTranscript.includes('ganti ke') || rawTranscript.includes('mode ') || rawTranscript.includes('situasi') || rawTranscript.includes('laporan') || rawTranscript.includes('status') || rawTranscript.includes('tinggi air') || rawTranscript.includes('tegangan') || rawTranscript.includes('baterai') || rawTranscript.includes('solar') || rawTranscript.includes('cuaca') || rawTranscript.includes('kirim telegram') || rawTranscript.includes('buka menu');
+        // Cek apakah pengguna memanggil Wake Word ("Aegis")
+        const panggilWakeWord = rawTranscript.includes('aegis') || rawTranscript.includes('ejis') || rawTranscript.includes('agis') || rawTranscript.includes('halo asisten') || rawTranscript.includes('hai asisten');
 
-        // Jika pengguna hanya memanggil "Halo Aegis" / "Aegis" tanpa perintah lanjutan
-        let bersihTanpaWake = rawTranscript
-            .replace(/\b(halo|hai|hei|ok|oke|tolong|aegis|ejis|agis|asisten|komandan)\b/gi, '')
+        // Jika dalam mode Standby pasif (tidak klik tombol), WAJIB ada kata panggil "Aegis"
+        if (!manualListenMode && !panggilWakeWord) {
+            return;
+        }
+
+        // Hapus kata panggil untuk mengecek apakah ada kalimat perintah setelahnya
+        let sisaKalimat = rawTranscript
+            .replace(/\b(halo|hai|hei|ok|oke|tolong|aegis|ejis|agis|asisten)\b/gi, '')
             .trim();
 
-        if (adaPanggilan && bersihTanpaWake.length < 3) {
-            wakeWordWindow = true;
-            if (wakeTimer) clearTimeout(wakeTimer);
-            wakeTimer = setTimeout(() => { wakeWordWindow = false; }, 12000);
-            playBeep(1400, 'sine', 0.12, 0.06);
+        // Jika pengguna hanya memanggil "Halo Aegis" / "Aegis" saja, buka sesi dengar aktif 8 detik
+        if (panggilWakeWord && sisaKalimat.length < 3) {
+            playVoiceCommandBeep();
             addLog('AI', `🎙️ Panggilan Terdeteksi: "${rawTranscript}"`);
-            bicaraAI("Ya, saya mendengarkan. Silakan sebutkan perintah atau tanyakan situasi.");
+            manualListenMode = true;
+            updateAIButtonUI();
+            if (manualTimeout) clearTimeout(manualTimeout);
+            manualTimeout = setTimeout(() => {
+                manualListenMode = false;
+                updateAIButtonUI();
+            }, 8000);
             return;
         }
 
-        // Proses jika ada panggilan wake word, sedang dalam jendela panggil, atau kalimat perintah jelas
-        if (!adaPanggilan && !wakeWordWindow && !adaPerintahLangsung) {
-            return;
-        }
+        // Matikan mode dengar manual karena perintah sudah diterima
+        if (manualTimeout) clearTimeout(manualTimeout);
+        manualListenMode = false;
 
-        wakeWordWindow = false;
         const perintah = rawTranscript;
         addLog('AI', `Suara Masuk: "${perintah}"`);
         let jawaban = "";
 
         // --- A. MEMBACA SEMUA SITUASI / LAPORAN LENGKAP ---
-        if (perintah.includes('situasi') || perintah.includes('kondisi') || perintah.includes('laporan') || perintah.includes('sistem') || perintah.includes('analisa') || perintah.includes('semua') || perintah.includes('aman')) {
+        if (perintah.includes('situasi') || perintah.includes('kondisi') || perintah.includes('laporan') || perintah.includes('sistem') || perintah.includes('analisa') || perintah.includes('semua')) {
             jawaban = buatAnalisaSituasiLengkap();
         }
         // --- B. KENDALI POMPA AIR (CH1) ---
@@ -395,52 +455,78 @@ if (recognition) {
             jawaban = `Tegangan baterai saat ini ${bV} volt dengan arus ${bI} miliampere dan kapasitas ${bPct}. Sumber pengisian aktif menggunakan ${relayCH4_Charge}.`;
         } else if (perintah.includes('sinyal') || perintah.includes('lora')) {
             jawaban = `Kekuatan sinyal radio LoRa terpantau pada ${document.getElementById('txt-lora')?.innerText || 'minus 78 dBm'}.`;
-        } else if (adaPanggilan) {
-            jawaban = buatAnalisaSituasiLengkap();
+        } else {
+            jawaban = "Perintah belum dikenali. Silakan ucapkan Aegis situasi, Aegis nyalakan pompa, atau Aegis ganti ke adaptor.";
         }
 
         if (jawaban !== "") {
+            playVoiceCommandBeep(); // Bunyi beep halus konfirmasi eksekusi perintah suara
             addLog('AI', `Suara Keluar: "${jawaban}"`);
-            bicaraAI(jawaban);
+            setTimeout(() => {
+                bicaraAI(jawaban);
+            }, 180);
         }
     };
 
-    // Otomatis menyambung kembali mikrofon jika dihentikan oleh browser (Hands-Free Always-On)
     recognition.onend = function() {
-        if (handsFreeActive && systemBooted) {
+        isRecRunning = false;
+        updateAIButtonUI();
+        // Hanya nyalakan ulang standby jika AI tidak sedang berbicara
+        if (!isSpeakingAI && (handsFreeStandby || manualListenMode) && systemBooted) {
             setTimeout(() => {
-                try { recognition.start(); } catch (e) {}
-            }, 300);
+                startRecognitionSafely();
+            }, 600);
         }
     };
-    recognition.onerror = function() {
-        if (handsFreeActive && systemBooted) {
+
+    recognition.onerror = function(e) {
+        isRecRunning = false;
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+            handsFreeStandby = false;
+            manualListenMode = false;
+            updateAIButtonUI();
+            return;
+        }
+        if (!isSpeakingAI && handsFreeStandby && systemBooted) {
             setTimeout(() => {
-                try { recognition.start(); } catch (e) {}
-            }, 1000);
+                startRecognitionSafely();
+            }, 1500);
         }
     };
 }
 
-// Tombol AI di header berfungsi untuk mengaktifkan/menonaktifkan mode Hands-Free
+// Klik tombol AI Assistant untuk langsung bicara (tanpa kata panggil) atau menghentikan suara AI
 window.toggleVoiceAI = function() {
     if (!recognition) {
         alert("Browser Anda belum mendukung fitur suara Web Speech API. Gunakan Google Chrome atau Edge.");
         return;
     }
-    let btn = document.getElementById('btn-ai');
-    let txt = document.getElementById('ai-text');
-    handsFreeActive = !handsFreeActive;
-    if (handsFreeActive) {
-        mulaiHandsFreeAI();
-        if (btn) btn.classList.add('listening');
-        if (txt) txt.innerText = 'AI STANDBY (PANGGIL "AEGIS")';
-        bicaraAI("Mode asisten tangan bebas aktif. Cukup panggil Aegis kapan saja.");
+
+    // Jika AI sedang berbicara, klik tombol akan langsung menghentikan suara AI
+    if (isSpeakingAI) {
+        window.speechSynthesis.cancel();
+        isSpeakingAI = false;
+        manualListenMode = false;
+        updateAIButtonUI();
+        return;
+    }
+
+    // Toggle sesi dengar langsung (tanpa perlu memanggil "Aegis") selama 8 detik
+    if (!manualListenMode) {
+        manualListenMode = true;
+        handsFreeStandby = true;
+        playVoiceCommandBeep();
+        updateAIButtonUI();
+        startRecognitionSafely();
+        if (manualTimeout) clearTimeout(manualTimeout);
+        manualTimeout = setTimeout(() => {
+            manualListenMode = false;
+            updateAIButtonUI();
+        }, 8000);
     } else {
-        try { recognition.stop(); } catch (e) {}
-        aiListening = false;
-        if (btn) btn.classList.remove('listening');
-        if (txt) txt.innerText = "AI MIC MUTED";
+        manualListenMode = false;
+        if (manualTimeout) clearTimeout(manualTimeout);
+        updateAIButtonUI();
     }
 };
 
@@ -934,8 +1020,8 @@ function startBootSequence() {
                         startFirebaseListeners();
                         renderFluid();
                         simulatePCB();
-                        mulaiHandsFreeAI();
-                        bicaraAI(`Selamat datang ${userName}. Sistem pemantauan pintar Aegis aktif. Cukup panggil Aegis kapan saja untuk perintah suara.`);
+                        updateAIButtonUI();
+                        bicaraAI(`Selamat datang ${userName}. Sistem Aegis siap. Panggil Aegis diikuti perintah Anda kapan saja.`);
                     }, 100);
                 }, 500);
             }, 250);
@@ -1210,7 +1296,6 @@ async function fetchWeather() {
 
 // ================= LISTENER REALTIME FIREBASE (KAMERA, KONTROL, & SENSOR) =================
 function startFirebaseListeners() {
-    // 1. Listener Live Stream Kamera Base64 dari Firebase (Bisa Diakses Online dari Mana Saja)
     database.ref('kamera').on('value', (snap) => {
         let camData = snap.val();
         if (camData && camData.frame) {
@@ -1220,7 +1305,6 @@ function startFirebaseListeners() {
         }
     });
 
-    // 2. Listener Kontrol Relay, ATS & Lampu Flash Kamera
     database.ref('kontrol').on('value', (snapshot) => {
         let ctrl = snapshot.val() || {};
         relayCH1_Pump   = (ctrl.pompa === "ON" || ctrl.pompa === "MENYALA");
@@ -1260,7 +1344,6 @@ function startFirebaseListeners() {
         updateRelayButtonsUI();
     });
 
-    // 3. Listener Telemetri Sensor Real-Time
     database.ref('sensor/logs').limitToLast(20).on('value', (snapshot) => {
         globalHistory = [];
         snapshot.forEach(child => { globalHistory.push(child.val()); });
@@ -1357,7 +1440,6 @@ function startFirebaseListeners() {
                 else { trEl.innerText = `● STABIL (0.0 cm)`; trEl.style.color = "var(--primary)"; }
             }
 
-            // Peringatan suara otomatis jika air melonjak cepat (>= 15 cm dalam satu siklus) meski belum mencapai status bahaya
             if (systemBooted && currentDeltaWater >= 15 && data.status === 'AMAN') {
                 bicaraAI(`Perhatian, terdeteksi kenaikan air cukup cepat sebesar ${formatAngkaSuara(currentDeltaWater)} sentimeter.`);
             }
